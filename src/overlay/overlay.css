@@ -1,0 +1,367 @@
+:host {
+  /* SecureIntent brand palette */
+  --si-base: #050505; /* Base dark */
+  --si-cyan: #72ffff; /* Intent Cyan — primary accent */
+  --si-navy: #052656; /* Secure navy */
+  --si-mint: var(--si-cyan); /* legacy alias; accent is now Intent Cyan */
+  --si-border: rgba(255, 255, 255, 0.08);
+  --si-text: #f4f6f8;
+  --si-muted: #8b949e;
+  --si-faint: #5a626b;
+  --si-danger: #ff6b6b;
+  /* Primary font (logos & headers): Fira Code. Secondary (body): Inter. */
+  --si-mono: "Fira Code", ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  --si-sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+.si-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(4, 5, 7, 0.7);
+  backdrop-filter: blur(6px);
+  font-family: var(--si-sans);
+}
+
+.si-hud {
+  position: relative;
+  width: 100%;
+  max-width: 480px;
+  /* Never exceed the viewport; dvh keeps it honest on mobile URL-bar resize. */
+  max-height: min(85vh, 85dvh);
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, #0b0d11, #050507 70%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  box-shadow:
+    0 30px 80px -24px rgba(0, 0, 0, 0.9),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+  animation: si-pop 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.si-hud::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 24px;
+  right: 24px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(114, 255, 255, 0.55), transparent);
+}
+
+@keyframes si-pop {
+  from {
+    transform: translateY(8px) scale(0.98);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+.si-top {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+}
+.si-brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-family: var(--si-mono); /* Fira Code — logos & headers */
+  font-size: 13.5px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--si-text);
+}
+.si-brand svg {
+  display: block;
+  color: #ffffff;
+  flex-shrink: 0;
+}
+.si-wordmark {
+  white-space: nowrap;
+}
+.si-ai {
+  color: var(--si-mint);
+}
+.si-x {
+  background: none;
+  border: none;
+  color: var(--si-faint);
+  font-size: 20px;
+  line-height: 1;
+  padding: 0 2px;
+  cursor: pointer;
+  transition: color 150ms ease;
+}
+.si-x:hover {
+  color: var(--si-text);
+}
+
+.si-rule {
+  flex: 0 0 auto;
+  height: 1px;
+  background: var(--si-border);
+  margin: 0 18px;
+}
+
+.si-ghost-lead {
+  margin: 0;
+  padding: 16px 18px 4px;
+  font-size: 13px;
+  color: var(--si-text);
+}
+.si-ghost-counts {
+  list-style: none;
+  margin: 0;
+  padding: 6px 18px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.si-ghost-count {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.si-ghost-num {
+  font-family: var(--si-mono);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--si-mint);
+  font-variant-numeric: tabular-nums;
+  min-width: 2ch;
+  text-align: right;
+}
+.si-ghost-label {
+  font-family: var(--si-mono);
+  font-size: 13px;
+  color: var(--si-text);
+}
+
+.si-findings {
+  list-style: none;
+  margin: 0;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  /* The list is the only scrollable region; min-height:0 lets it shrink
+     inside the flex column so the header and actions stay pinned. */
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+.si-findings::-webkit-scrollbar {
+  width: 10px;
+}
+.si-findings::-webkit-scrollbar-track {
+  background: transparent;
+}
+.si-findings::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+  border-radius: 8px;
+}
+.si-findings::-webkit-scrollbar-thumb:hover {
+  background: rgba(114, 255, 255, 0.4);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+.si-finding {
+  /* Never let the flex column shrink a row — otherwise many rows compress into
+     thin bars and `overflow:hidden` clips their text (blank list with 15+ items).
+     Rows keep their natural height and the list scrolls instead. */
+  flex: 0 0 auto;
+  background: linear-gradient(180deg, rgba(9, 24, 48, 0.7), rgba(255, 255, 255, 0.015));
+  border: 1px solid var(--si-border);
+  border-radius: 10px;
+  overflow: hidden;
+  transition: border-color 160ms ease;
+}
+.si-finding:hover {
+  border-color: rgba(114, 255, 255, 0.2);
+}
+.si-finding-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: transparent;
+  border: none;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: background 150ms ease;
+}
+.si-finding-row:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+.si-finding-row:focus-visible {
+  outline: 2px solid var(--si-mint);
+  outline-offset: -2px;
+}
+.si-sev {
+  width: 3px;
+  align-self: stretch;
+  min-height: 20px;
+  background: var(--si-mint);
+  border-radius: 2px;
+  box-shadow: 0 0 8px rgba(114, 255, 255, 0.45);
+}
+.si-finding-name {
+  flex: 1;
+  font-family: var(--si-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--si-text);
+}
+.si-finding-meta {
+  font-family: var(--si-mono);
+  font-size: 12px;
+  color: var(--si-muted);
+  font-variant-numeric: tabular-nums;
+}
+.si-chevron {
+  width: 15px;
+  height: 15px;
+  color: var(--si-faint);
+  transition:
+    transform 180ms ease,
+    color 150ms ease;
+}
+.si-chevron.is-open {
+  transform: rotate(180deg);
+  color: var(--si-mint);
+}
+.si-finding-detail {
+  padding: 0 14px 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.si-snippet {
+  font-family: var(--si-mono);
+  font-size: 12px;
+  color: #c9d1d9;
+  background: var(--si-base);
+  border: 1px solid var(--si-border);
+  border-radius: 8px;
+  padding: 9px 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.si-actions {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 8px;
+  padding: 14px 18px 18px;
+  /* Hairline separates the pinned footer from the scrolling list above. */
+  border-top: 1px solid var(--si-border);
+}
+.si-btn {
+  flex: 1;
+  text-align: center;
+  font-family: var(--si-mono);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  white-space: nowrap;
+  padding: 11px 13px;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition:
+    transform 140ms ease,
+    background 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease,
+    box-shadow 150ms ease;
+}
+.si-btn:hover {
+  transform: translateY(-1px);
+}
+.si-btn:active {
+  transform: translateY(0) scale(0.99);
+}
+.si-btn-ghost {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: #c4ccd6;
+}
+.si-btn-ghost:hover {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.28);
+  color: var(--si-text);
+}
+.si-btn-danger {
+  background: transparent;
+  border-color: rgba(255, 107, 107, 0.4);
+  color: var(--si-danger);
+}
+.si-btn-danger:hover {
+  background: rgba(255, 107, 107, 0.1);
+}
+.si-btn-mint {
+  background: linear-gradient(180deg, #8cffff, var(--si-cyan));
+  color: var(--si-navy);
+  border-color: var(--si-cyan);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+.si-btn-mint:hover {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    0 8px 22px -10px rgba(114, 255, 255, 0.6);
+}
+.si-btn:focus-visible {
+  outline: 2px solid var(--si-mint);
+  outline-offset: 2px;
+}
+
+@media (max-width: 420px) {
+  .si-scrim {
+    padding: 12px;
+  }
+  .si-hud {
+    /* Reclaim more height on small screens where vertical room is scarce. */
+    max-height: min(92vh, 92dvh);
+  }
+  .si-actions {
+    /* Let the three actions wrap instead of overflowing a narrow dialog. */
+    flex-wrap: wrap;
+  }
+  .si-btn {
+    flex: 1 1 40%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .si-hud {
+    animation: none;
+  }
+  .si-btn:hover,
+  .si-btn:active {
+    transform: none;
+  }
+}

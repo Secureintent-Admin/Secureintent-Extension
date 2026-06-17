@@ -1,0 +1,19 @@
+rules:
+  - id: no-raw-paste-egress
+    mode: taint
+    languages: [typescript]
+    severity: ERROR
+    message: >
+      Raw pasted text must never leave the device. Only the salted fingerprint
+      may be sent or logged. Route paste content through detection/fingerprint,
+      not fetch/console/sendMessage.
+    pattern-sources:
+      - pattern: $E.clipboardData.getData(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: fetch(...)
+              - pattern: $X.fetch(...)
+              - pattern: console.$M(...)
+              - pattern: chrome.runtime.sendMessage(...)
+              - pattern: browser.runtime.sendMessage(...)

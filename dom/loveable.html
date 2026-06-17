@@ -1,0 +1,329 @@
+<div class="w-full max-w-2xl">
+  <div class="relative w-full">
+    <div class="flex w-full flex-col items-center">
+      <div class="relative size-full">
+        <form
+          id="chat-input"
+          class="group flex flex-col gap-2 p-3 rounded-3.5xl bg-muted w-full border text-base shadow-xl ring-1 transition-all duration-150 ease-in-out border-white ring-black/8 hover:border-white/90 hover:ring-black/12 focus-within:border-white focus-within:hover:border-white focus-within:ring-black/16 focus-within:hover:ring-black/16 dark:border-white/8 dark:ring-black/88 dark:hover:border-foreground/12 dark:hover:ring-black/96 dark:focus-within:border-foreground/16 dark:focus-within:hover:border-foreground/16 dark:focus-within:ring-black/96 dark:focus-within:hover:ring-black/96"
+        >
+          <div class="w-full min-w-0">
+            <div>
+              <div style="min-height: 38px">
+                <div id="chatinput" class="relative grid w-full flex-1">
+                  <span
+                    aria-hidden="true"
+                    class="text-muted-foreground pointer-events-none col-start-1 row-start-1 p-2 text-[16px] leading-snug md:text-base animate-in fade-in-0 duration-500 opacity-100"
+                    >Ask Lovable to make a document that...</span
+                  >
+                  <div
+                    class="col-start-1 row-start-1 w-full min-w-0 select-text"
+                  >
+                    <div
+                      contenteditable="true"
+                      role="textbox"
+                      aria-label="Chat input"
+                      aria-multiline="true"
+                      translate="no"
+                      class="tiptap ProseMirror text-foreground text-[16px] leading-snug outline-hidden md:text-base max-h-[max(35svh,5rem)] overflow-y-auto w-full max-w-none min-w-0 prose prose-sm overflow-wrap-anywhere overflow-x-hidden break-words whitespace-pre-wrap"
+                      tabindex="0"
+                      style="min-height: 38px"
+                    >
+                      <p><br class="ProseMirror-trailingBreak" /></p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div
+            class="@container flex-wrap gap-1 @container/create-form-button-row flex items-center"
+          >
+            <div class="flex min-w-0 items-center gap-1">
+              <button
+                type="button"
+                data-button=""
+                aria-label="Additional actions"
+                data-testid="create-form-plus-menu-trigger"
+                tabindex="0"
+                data-base-ui-click-trigger=""
+                id="base-ui-_r_3g_"
+                class="btn-primitive box-border inline-flex items-center justify-center whitespace-nowrap font-normal select-none disabled:opacity-50 gap-1 px-2.5 py-1.5 text-sm [&amp;_svg[data-default-size]]:size-4 rounded-full !p-0 h-8 w-8 relative isolate"
+                aria-haspopup="dialog"
+                aria-expanded="false"
+                style="color: var(--fg-primary); background: transparent"
+              >
+                <span
+                  data-fx-layer="interaction"
+                  aria-hidden="true"
+                  class="pointer-events-none absolute inset-0 rounded-[inherit] will-change-opacity transition-opacity duration-150 group-hover:duration-0 group-active:duration-0 z-0 [@media(hover:none)]:hidden opacity-[var(--_resting)] dark:opacity-[var(--_dark-resting)] [[data-button]:hover_&amp;]:opacity-[var(--_hover)] dark:[[data-button]:hover_&amp;]:opacity-[var(--_dark-hover)] [[data-button]:active_&amp;]:opacity-[var(--_pressed)] dark:[[data-button]:active_&amp;]:opacity-[var(--_dark-pressed)] [[data-button][aria-disabled='true']_&amp;]:opacity-[var(--_resting)] dark:[[data-button][aria-disabled='true']_&amp;]:opacity-[var(--_dark-resting)]"
+                  style="
+                    background-color: light-dark(oklch(0 0 0), oklch(1 0 0));
+                    --_resting: 0;
+                    --_hover: 0.08;
+                    --_pressed: 0.1;
+                    --_dark-resting: 0;
+                    --_dark-hover: 0.12;
+                    --_dark-pressed: 0.16;
+                  "
+                ></span
+                ><span
+                  data-button-content="true"
+                  class="relative z-30 inline-flex h-full w-full items-center justify-center gap-1"
+                  ><svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="currentColor"
+                    viewBox="0 0 24 24"
+                    width="100%"
+                    height="100%"
+                    class="shrink-0 size-5"
+                    aria-hidden="true"
+                    data-default-size=""
+                  >
+                    <path
+                      fill="currentColor"
+                      d="M11.25 20v-7.25H4a.75.75 0 0 1 0-1.5h7.25V4a.75.75 0 0 1 1.5 0v7.25H20a.75.75 0 0 1 0 1.5h-7.25V20a.75.75 0 0 1-1.5 0"
+                    ></path></svg
+                ></span></button
+              ><input
+                class="hidden"
+                aria-label="Attach files"
+                multiple=""
+                tabindex="-1"
+                type="file"
+                style="
+                  border: 0px;
+                  clip: rect(0px, 0px, 0px, 0px);
+                  clip-path: inset(50%);
+                  height: 1px;
+                  margin: 0px -1px -1px 0px;
+                  overflow: hidden;
+                  padding: 0px;
+                  position: absolute;
+                  width: 1px;
+                  white-space: nowrap;
+                "
+              />
+            </div>
+            <div class="ml-auto flex items-center gap-1">
+              <button
+                type="button"
+                data-button=""
+                aria-label="Enable plan mode"
+                tabindex="0"
+                aria-haspopup="menu"
+                id="base-ui-_r_24_"
+                class="btn-primitive box-border inline-flex items-center justify-center whitespace-nowrap font-normal select-none disabled:opacity-50 h-8 px-2.5 py-1.5 text-sm [&amp;_svg[data-default-size]]:size-4 rounded-full relative isolate gap-0.5"
+                aria-expanded="false"
+                style="color: var(--fg-primary); background: transparent"
+              >
+                <span
+                  data-fx-layer="interaction"
+                  aria-hidden="true"
+                  class="pointer-events-none absolute inset-0 rounded-[inherit] will-change-opacity transition-opacity duration-150 group-hover:duration-0 group-active:duration-0 z-0 [@media(hover:none)]:hidden opacity-[var(--_resting)] dark:opacity-[var(--_dark-resting)] [[data-button]:hover_&amp;]:opacity-[var(--_hover)] dark:[[data-button]:hover_&amp;]:opacity-[var(--_dark-hover)] [[data-button]:active_&amp;]:opacity-[var(--_pressed)] dark:[[data-button]:active_&amp;]:opacity-[var(--_dark-pressed)] [[data-button][aria-disabled='true']_&amp;]:opacity-[var(--_resting)] dark:[[data-button][aria-disabled='true']_&amp;]:opacity-[var(--_dark-resting)]"
+                  style="
+                    background-color: light-dark(oklch(0 0 0), oklch(1 0 0));
+                    --_resting: 0;
+                    --_hover: 0.08;
+                    --_pressed: 0.1;
+                    --_dark-resting: 0;
+                    --_dark-hover: 0.12;
+                    --_dark-pressed: 0.16;
+                  "
+                ></span
+                ><span
+                  data-button-content="true"
+                  class="relative z-30 inline-flex h-full w-full items-center justify-center gap-1"
+                  ><span class="px-0.5">Build</span
+                  ><svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="currentColor"
+                    viewBox="0 0 24 24"
+                    width="100%"
+                    height="100%"
+                    class="shrink-0 size-5"
+                    aria-hidden="true"
+                    data-default-size=""
+                  >
+                    <path
+                      fill="currentColor"
+                      d="M11.526 15.582a.75.75 0 0 0 1.004-.052l5-5a.75.75 0 1 0-1.06-1.06L12 13.94 7.53 9.47a.75.75 0 1 0-1.06 1.06l5 5z"
+                    ></path></svg
+                ></span></button
+              ><button
+                type="button"
+                data-button=""
+                aria-label="Start voice recording"
+                class="btn-primitive box-border inline-flex items-center justify-center whitespace-nowrap font-normal select-none disabled:opacity-50 gap-1 px-2.5 py-1.5 text-sm [&amp;_svg[data-default-size]]:size-4 rounded-full !p-0 h-8 w-8 relative isolate"
+                id="base-ui-_r_29_"
+                style="color: var(--fg-primary); background: transparent"
+              >
+                <span
+                  data-fx-layer="interaction"
+                  aria-hidden="true"
+                  class="pointer-events-none absolute inset-0 rounded-[inherit] will-change-opacity transition-opacity duration-150 group-hover:duration-0 group-active:duration-0 z-0 [@media(hover:none)]:hidden opacity-[var(--_resting)] dark:opacity-[var(--_dark-resting)] [[data-button]:hover_&amp;]:opacity-[var(--_hover)] dark:[[data-button]:hover_&amp;]:opacity-[var(--_dark-hover)] [[data-button]:active_&amp;]:opacity-[var(--_pressed)] dark:[[data-button]:active_&amp;]:opacity-[var(--_dark-pressed)] [[data-button][aria-disabled='true']_&amp;]:opacity-[var(--_resting)] dark:[[data-button][aria-disabled='true']_&amp;]:opacity-[var(--_dark-resting)]"
+                  style="
+                    background-color: light-dark(oklch(0 0 0), oklch(1 0 0));
+                    --_resting: 0;
+                    --_hover: 0.08;
+                    --_pressed: 0.1;
+                    --_dark-resting: 0;
+                    --_dark-hover: 0.12;
+                    --_dark-pressed: 0.16;
+                  "
+                ></span
+                ><span
+                  data-button-content="true"
+                  class="relative z-30 inline-flex h-full w-full items-center justify-center gap-1"
+                  ><svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="currentColor"
+                    viewBox="0 0 24 24"
+                    width="100%"
+                    height="100%"
+                    class="shrink-0 size-5"
+                    aria-hidden="true"
+                    data-default-size=""
+                  >
+                    <path
+                      fill="currentColor"
+                      d="M11.25 21v-2.286a8.25 8.25 0 0 1-7.5-8.214.75.75 0 0 1 1.5 0 6.75 6.75 0 0 0 13.5 0 .75.75 0 0 1 1.5 0 8.25 8.25 0 0 1-7.5 8.214V21a.75.75 0 0 1-1.5 0m4-14a3.25 3.25 0 0 0-6.5 0v3a3.25 3.25 0 0 0 6.5 0zm1.5 3a4.75 4.75 0 1 1-9.5 0V7a4.75 4.75 0 0 1 9.5 0z"
+                    ></path></svg
+                ></span></button
+              ><button
+                type="submit"
+                data-button=""
+                id="chatinput-send-message-button"
+                disabled=""
+                class="btn-primitive box-border inline-flex items-center justify-center whitespace-nowrap font-normal select-none gap-1 px-2.5 py-1.5 text-sm [&amp;_svg[data-default-size]]:size-4 rounded-full !p-0 disabled:cursor-not-allowed disabled:opacity-50 disabled:pointer-events-none aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:pointer-events-none h-8 w-8 relative isolate shrink-0 ml-1"
+                style="color: var(--fg-inverse); background: var(--bg-inverse)"
+              >
+                <span
+                  data-fx-layer="drop-shadow"
+                  aria-hidden="true"
+                  class="pointer-events-none absolute inset-0 rounded-[inherit] will-change-opacity transition-opacity duration-150 group-hover:duration-0 group-active:duration-0 z-[-1] [[data-button]:active_&amp;]:opacity-0 [[data-button]:disabled_&amp;]:opacity-0 [[data-button][aria-disabled='true']_&amp;]:opacity-0"
+                  style="
+                    box-shadow:
+                      0 2px 2px -1px
+                        light-dark(
+                          oklch(
+                            from var(--bg-inverse) 0.2 calc(c * 1.2) h / 0.12
+                          ),
+                          oklch(
+                            from var(--bg-inverse) 0.2 calc(c * 1.2) h / 0.12
+                          )
+                        ),
+                      0 4px 4px -2px
+                        light-dark(
+                          oklch(
+                            from var(--bg-inverse) 0.2 calc(c * 1.2) h / 0.12
+                          ),
+                          oklch(
+                            from var(--bg-inverse) 0.2 calc(c * 1.2) h / 0.12
+                          )
+                        );
+                  "
+                ></span
+                ><span
+                  data-fx-layer="interaction"
+                  aria-hidden="true"
+                  class="pointer-events-none absolute inset-0 rounded-[inherit] will-change-opacity transition-opacity duration-150 group-hover:duration-0 group-active:duration-0 z-0 [@media(hover:none)]:hidden opacity-[var(--_resting)] dark:opacity-[var(--_dark-resting)] [[data-button]:hover_&amp;]:opacity-[var(--_hover)] dark:[[data-button]:hover_&amp;]:opacity-[var(--_dark-hover)] [[data-button]:active_&amp;]:opacity-[var(--_pressed)] dark:[[data-button]:active_&amp;]:opacity-[var(--_dark-pressed)] [[data-button][aria-disabled='true']_&amp;]:opacity-[var(--_resting)] dark:[[data-button][aria-disabled='true']_&amp;]:opacity-[var(--_dark-resting)]"
+                  style="
+                    background-color: light-dark(
+                      oklch(from var(--bg-inverse) calc(l - 0.1) c h / 1),
+                      oklch(from var(--bg-inverse) calc(l + 0.15) c h / 0.7)
+                    );
+                    --_resting: 0;
+                    --_hover: 0.8;
+                    --_pressed: 1;
+                    --_dark-resting: 0;
+                    --_dark-hover: 0.8;
+                    --_dark-pressed: 1;
+                  "
+                ></span
+                ><span
+                  data-fx-layer="spotlights"
+                  aria-hidden="true"
+                  class="pointer-events-none absolute inset-0 rounded-[inherit] will-change-opacity transition-opacity duration-150 group-hover:duration-0 group-active:duration-0 z-1 [[data-button]:active_&amp;]:opacity-0 [[data-button]:disabled_&amp;]:opacity-0 [[data-button][aria-disabled='true']_&amp;]:opacity-0"
+                  style="
+                    box-shadow:
+                      inset 0 1px 0 0px
+                        light-dark(
+                          oklch(from var(--bg-inverse) 0.98 0.01 h / 0.24),
+                          transparent
+                        ),
+                      inset 0 -1px 0 0px
+                        light-dark(
+                          oklch(from var(--bg-inverse) 0.98 0.01 h / 1),
+                          transparent
+                        ),
+                      inset 0 0.5px 0 0px
+                        light-dark(
+                          transparent,
+                          oklch(from var(--bg-inverse) 0.98 0.01 h / 1)
+                        ),
+                      inset 0 -0.5px 0 0px
+                        light-dark(
+                          transparent,
+                          oklch(from var(--bg-inverse) 0.98 0.01 h / 1)
+                        );
+                  "
+                ></span
+                ><span
+                  data-fx-layer="dome-overlay"
+                  aria-hidden="true"
+                  class="absolute inset-0 rounded-[inherit] pointer-events-none z-2"
+                  style="
+                    background-image: linear-gradient(
+                      light-dark(transparent, transparent),
+                      light-dark(oklch(0 0 0 / 0.88), oklch(0 0 0 / 0.08))
+                    );
+                  "
+                ></span
+                ><span
+                  data-fx-layer="rim"
+                  aria-hidden="true"
+                  class="pointer-events-none absolute inset-0 rounded-[inherit] z-3 [[data-button]:disabled_&amp;]:opacity-0 [[data-button][aria-disabled='true']_&amp;]:opacity-0"
+                  style="
+                    box-shadow: inset 0 0 0 var(--border-default)
+                      light-dark(black, white);
+                  "
+                ></span
+                ><span
+                  data-fx-layer="secondary-spotlights"
+                  aria-hidden="true"
+                  class="pointer-events-none absolute inset-0 rounded-[inherit] will-change-opacity transition-opacity duration-150 group-hover:duration-0 group-active:duration-0 z-4 [[data-button]:active_&amp;]:opacity-0 [[data-button]:disabled_&amp;]:opacity-0 [[data-button][aria-disabled='true']_&amp;]:opacity-0"
+                  style="
+                    box-shadow:
+                      light-dark(oklch(1 0 0 / 0.08), oklch(1 0 0 / 0)) 0px
+                        0.5px 0px 0px inset,
+                      light-dark(oklch(0 0 0 / 0.16), oklch(0 0 0 / 0))
+                        0px -0.5px 0px 0px inset;
+                  "
+                ></span
+                ><span
+                  data-button-content="true"
+                  class="relative z-30 inline-flex h-full w-full items-center justify-center gap-1"
+                  ><svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="currentColor"
+                    viewBox="0 0 24 24"
+                    width="100%"
+                    height="100%"
+                    class="shrink-0 size-5"
+                    aria-hidden="true"
+                    data-default-size=""
+                  >
+                    <path
+                      fill="currentColor"
+                      d="M11 19V7.415l-3.293 3.293a1 1 0 1 1-1.414-1.414l5-5 .074-.067a1 1 0 0 1 1.34.067l5 5a1 1 0 1 1-1.414 1.414L13 7.415V19a1 1 0 1 1-2 0"
+                    ></path></svg
+                  ><span class="sr-only">Send message</span></span
+                >
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>

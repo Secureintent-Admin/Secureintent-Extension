@@ -1,0 +1,69 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.4.16/schema.json",
+  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+  "files": {
+    "includes": [
+      "src/**",
+      "test/**",
+      "*.ts",
+      "*.json",
+      "!**/dist",
+      "!**/.wxt",
+      "!**/.output",
+      "!**/coverage"
+    ]
+  },
+  "formatter": { "enabled": true, "indentStyle": "space", "indentWidth": 2, "lineWidth": 100 },
+  "javascript": {
+    "formatter": { "quoteStyle": "single", "semicolons": "always", "trailingCommas": "all" }
+  },
+  "json": { "formatter": { "indentStyle": "space", "lineWidth": 100 } },
+  "linter": { "enabled": true, "rules": { "recommended": true } },
+  "assist": { "enabled": true, "actions": { "source": { "organizeImports": "on" } } },
+  "overrides": [
+    {
+      "includes": ["**/*.test.ts", "**/*.test.tsx"],
+      "linter": {
+        "rules": {
+          "style": { "noNonNullAssertion": "off", "useTemplate": "off" }
+        }
+      }
+    },
+    {
+      "includes": ["src/overlay/Overlay.tsx"],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "noStaticElementInteractions": "off",
+            "useKeyWithClickEvents": "off"
+          },
+          "suspicious": { "noArrayIndexKey": "off" }
+        }
+      }
+    },
+    {
+      "includes": ["src/lib/detection/index.ts"],
+      "linter": {
+        "rules": {
+          "suspicious": { "noAssignInExpressions": "off" }
+        }
+      }
+    },
+    {
+      "includes": ["src/entrypoints/popup/main.tsx"],
+      "linter": {
+        "rules": {
+          "style": { "noNonNullAssertion": "off" }
+        }
+      }
+    },
+    {
+      "includes": ["src/entrypoints/popup/App.tsx"],
+      "linter": {
+        "rules": {
+          "suspicious": { "noCommentText": "off" }
+        }
+      }
+    }
+  ]
+}

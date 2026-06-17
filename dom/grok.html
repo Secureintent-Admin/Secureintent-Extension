@@ -1,0 +1,186 @@
+<form
+  class="w-full text-base flex flex-col gap-2 items-center justify-center relative z-10 mt-0"
+>
+  <div
+    class="flex flex-col gap-0 justify-center w-full relative items-center @xl:w-4/5"
+  >
+    <input class="hidden" multiple="" type="file" name="files" />
+    <div
+      class="query-bar group z-20 relative w-full overflow-hidden @container/input pb-0 bg-surface-l1 ring-1 ring-inset ring-border-l1 focus-within:ring-1 hover:ring-border-l1 focus-within:ring-border-l1 hover:focus-within:ring-border-l1 transition-[border-radius] duration-200 ease-in-out rounded-t-[var(--border-t-radius)] rounded-b-[var(--border-b-radius)] max-w-breakout shadow-sm shadow-black/5"
+      style="
+        transition-property: background-color, box-shadow, border-color;
+        transition-duration: 100ms;
+        transition-timing-function: ease-in-out;
+        --border-b-radius: 10rem;
+        --border-t-radius: 10rem;
+      "
+    >
+      <div class="w-full ps-4 pe-2">
+        <div
+          role="list"
+          aria-label="Conversation attachments"
+          class="w-full flex-row gap-2 mt-3 px-1 whitespace-nowrap hidden flex-wrap will-change-[mask-image] @sm:[mask-image:none] [mask-image:linear-gradient(to_right,transparent_0,black_0px,black_calc(100%_-_40px),transparent_100%)]"
+          style="opacity: 1; transform: none"
+        ></div>
+      </div>
+      <div
+        class="transition-[padding] duration-75 ease-out ps-11 pe-[138px]"
+        style="padding-inline-end: 169.188px"
+      >
+        <div class="relative z-10 transition-[padding] duration-75 ease-out">
+          <textarea
+            dir="auto"
+            placeholder="What do you want to know?"
+            aria-label="Ask Grok anything"
+            class="w-full px-2 leading-7 bg-transparent focus:outline-none text-fg-primary align-bottom min-h-[60px] placeholder:text-fg-secondary pt-4 my-0 scroll-feather-y"
+            style="resize: none; height: 44px !important"
+          ></textarea>
+        </div>
+        <div
+          class="flex absolute inset-x-0 bottom-0 border-2 border-transparent max-w-full p-2 @[480px]/input:p-2"
+        >
+          <div class="grow flex items-center gap-1.5">
+            <div class="flex items-center">
+              <button
+                class="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium leading-[normal] cursor-pointer focus-visible:outline-none focus-visible:ring-1 disabled:opacity-60 disabled:cursor-not-allowed transition-colors duration-100 [&amp;_svg]:shrink-0 select-none text-fg-primary hover:bg-button-ghost-hover disabled:hover:bg-transparent border border-transparent h-10 w-10 rounded-full group/attach-button focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background"
+                type="button"
+                aria-label="Attach"
+                data-testid="attach-button"
+                tabindex="0"
+                id="radix-_r_2e_"
+                aria-haspopup="menu"
+                aria-expanded="false"
+                data-state="closed"
+              >
+                <span
+                  class="flex items-center justify-center text-primary"
+                  style="transform: none"
+                  ><svg
+                    width="22"
+                    height="22"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                    class="stroke-[2]"
+                  >
+                    <path
+                      d="M6 12H18M12 6V18"
+                      stroke="currentColor"
+                      stroke-linecap="square"
+                    ></path></svg
+                ></span>
+              </button>
+            </div>
+            <div class="ms-auto flex flex-row items-end gap-1">
+              <div
+                class="relative z-20"
+                data-query-bar-mode-select="true"
+                style="opacity: 1; filter: blur(0px)"
+              >
+                <button
+                  class="inline-flex items-center justify-center gap-2 whitespace-nowrap font-medium cursor-pointer focus-visible:outline-none focus-visible:ring-1 disabled:opacity-60 disabled:cursor-not-allowed transition-colors duration-100 [&amp;_svg]:shrink-0 select-none hover:bg-button-ghost-hover disabled:hover:bg-transparent border border-transparent h-10 px-3.5 py-1.5 text-sm rounded-full text-primary focus:outline-none aria-expanded:bg-button-ghost-hover pe-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background"
+                  type="button"
+                  id="model-select-trigger"
+                  aria-label="Model select"
+                  aria-haspopup="menu"
+                  aria-expanded="false"
+                  data-state="closed"
+                >
+                  <span class="flex items-center gap-1.5"
+                    ><span
+                      class="flex items-center gap-1 overflow-hidden"
+                      style="width: auto; opacity: 1"
+                      ><span class="truncate text-sm font-semibold"
+                        >Fast</span
+                      ></span
+                    ></span
+                  ><span
+                    class="flex items-center gap-1 overflow-hidden"
+                    style="width: auto; opacity: 1"
+                    ><svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                      class="stroke-[2] size-4 text-secondary"
+                    >
+                      <path
+                        d="M6 9L12 15L18 9"
+                        stroke="currentColor"
+                        stroke-linecap="square"
+                      ></path></svg
+                  ></span>
+                </button>
+              </div>
+              <div style="opacity: 1; filter: blur(0px)">
+                <div class="h-10 w-10 rounded-full shrink-0">
+                  <button
+                    class="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium leading-[normal] cursor-pointer focus-visible:outline-none focus-visible:ring-1 disabled:opacity-60 disabled:cursor-not-allowed transition-colors duration-100 [&amp;_svg]:shrink-0 select-none text-fg-primary hover:bg-button-ghost-hover disabled:hover:bg-transparent border border-transparent h-10 w-10 rounded-full focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background"
+                    type="button"
+                    aria-label="Dictation (⌃D)"
+                    data-state="closed"
+                  >
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                      class="stroke-[2]"
+                    >
+                      <g id="name=microphone">
+                        <path
+                          id="vector"
+                          d="M19.0518 12.6826L20.9482 13.3174V13.3184L20.9473 13.3203C20.9467 13.3221 20.9462 13.3247 20.9453 13.3271C20.9436 13.3322 20.9412 13.3389 20.9385 13.3467C20.9329 13.3627 20.9249 13.3852 20.915 13.4121C20.8953 13.4658 20.8666 13.5402 20.8291 13.6328C20.754 13.8183 20.642 14.0772 20.4883 14.3848C20.1819 14.9976 19.7047 15.8173 19.0186 16.6406C17.7807 18.126 15.8326 19.6511 13 19.9473V22H11V19.9473C8.16736 19.6511 6.21926 18.126 4.98145 16.6406C4.2953 15.8173 3.81813 14.9976 3.51172 14.3848C3.35795 14.0772 3.24599 13.8183 3.1709 13.6328C3.13343 13.5402 3.10465 13.4658 3.08496 13.4121C3.07511 13.3852 3.06712 13.3627 3.06152 13.3467C3.0588 13.3389 3.05641 13.3322 3.05469 13.3271C3.05385 13.3247 3.05334 13.3221 3.05273 13.3203L3.05176 13.3184V13.3174L4.94824 12.6826V12.6816C4.94854 12.6825 4.9492 12.6846 4.9502 12.6875C4.95253 12.6942 4.95678 12.706 4.96289 12.7227C4.97542 12.7568 4.99559 12.8116 5.02441 12.8828C5.08214 13.0254 5.17333 13.2353 5.30078 13.4902C5.55686 14.0024 5.95474 14.6828 6.51855 15.3594C7.6401 16.7052 9.3811 18 12 18C14.6189 18 16.3599 16.7052 17.4814 15.3594C18.0453 14.6828 18.4431 14.0024 18.6992 13.4902C18.8267 13.2353 18.9179 13.0254 18.9756 12.8828C19.0044 12.8116 19.0246 12.7568 19.0371 12.7227C19.0432 12.706 19.0475 12.6942 19.0498 12.6875C19.0508 12.6846 19.0515 12.6825 19.0518 12.6816V12.6826ZM15 7C15 5.34315 13.6569 4 12 4C10.3431 4 9 5.34315 9 7V11C9 12.6569 10.3431 14 12 14C13.6569 14 15 12.6569 15 11V7ZM17 11C17 13.7614 14.7614 16 12 16C9.23858 16 7 13.7614 7 11V7C7 4.23858 9.23858 2 12 2C14.7614 2 17 4.23858 17 7V11Z"
+                          fill="currentColor"
+                        ></path>
+                      </g>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              <div style="opacity: 1; filter: blur(0px)">
+                <button
+                  type="button"
+                  class="group flex flex-col justify-center rounded-full focus:outline-none focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background active:scale-[0.97] transition-transform"
+                  aria-label="Enter voice mode (⌘⇧O)"
+                  data-state="closed"
+                >
+                  <div
+                    class="h-10 relative aspect-square flex items-center justify-center gap-0.5 rounded-full ring-1 ring-inset before:absolute before:inset-0 before:rounded-full before:bg-button-filled before:ring-0 before:transition-[clip-path,background-color] before:duration-200 before:ease-out bg-button-filled text-fg-invert ring-transparent before:[clip-path:circle(50%_at_50%_50%)]"
+                  >
+                    <div
+                      class="w-0.5 relative z-10 rounded-full transition-colors duration-200 ease-out bg-fg-invert"
+                      style="height: 0.4rem"
+                    ></div>
+                    <div
+                      class="w-0.5 relative z-10 rounded-full transition-colors duration-200 ease-out bg-fg-invert"
+                      style="height: 0.8rem"
+                    ></div>
+                    <div
+                      class="w-0.5 relative z-10 rounded-full transition-colors duration-200 ease-out bg-fg-invert"
+                      style="height: 1.2rem"
+                    ></div>
+                    <div
+                      class="w-0.5 relative z-10 rounded-full transition-colors duration-200 ease-out bg-fg-invert"
+                      style="height: 0.7rem"
+                    ></div>
+                    <div
+                      class="w-0.5 relative z-10 rounded-full transition-colors duration-200 ease-out bg-fg-invert"
+                      style="height: 1rem"
+                    ></div>
+                    <div
+                      class="w-0.5 relative z-10 rounded-full transition-colors duration-200 ease-out bg-fg-invert"
+                      style="height: 0.4rem"
+                    ></div>
+                  </div>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</form>

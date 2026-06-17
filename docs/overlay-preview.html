@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SecureIntent — overlay (final)</title>
+    <style>
+      :root {
+        --si-border: rgba(255, 255, 255, 0.08);
+        --si-mint: #7df9e4;
+        --si-text: #f4f6f8;
+        --si-muted: #8b949e;
+        --si-faint: #5a626b;
+        --si-danger: #ff6b6b;
+        --si-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+        --si-sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: #0a0c0e; font-family: var(--si-sans); padding: 56px 24px; display: flex; flex-direction: column; align-items: center; gap: 40px; }
+      .icons { display: flex; align-items: flex-end; gap: 20px; }
+      .icons img { image-rendering: auto; }
+      .cap { font-family: var(--si-mono); font-size: 11px; color: var(--si-faint); text-align: center; margin-top: 6px; }
+      button { font-family: inherit; cursor: pointer; }
+
+      .si-hud {
+        position: relative; width: 520px; background: #060709;
+        border: 1px solid rgba(125, 249, 228, 0.32); border-radius: 12px;
+        box-shadow: 0 24px 70px rgba(0,0,0,0.7), 0 0 50px rgba(125,249,228,0.1); overflow: hidden;
+      }
+      .si-hud::before { content:""; position:absolute; top:0; left:0; right:0; height:2px; background: linear-gradient(90deg, transparent, var(--si-mint), transparent); }
+      .si-top { display:flex; align-items:center; justify-content:space-between; padding:14px 18px; }
+      .si-brand { display:flex; align-items:center; gap:9px; font-size:13.5px; font-weight:650; letter-spacing:-0.01em; color:var(--si-text); }
+      .si-brand svg { display:block; color:#fff; }
+      .si-wordmark { white-space:nowrap; }
+      .si-ai { color: var(--si-mint); }
+      .si-x { background:none; border:none; color:var(--si-faint); font-size:20px; line-height:1; padding:0 2px; }
+      .si-rule { height:1px; background:var(--si-border); margin:0 18px; }
+      .si-findings { list-style:none; margin:0; padding:16px 18px; display:flex; flex-direction:column; gap:9px; }
+      .si-finding { background:#0c1014; border:1px solid var(--si-border); border-radius:8px; overflow:hidden; }
+      .si-finding-row { width:100%; display:flex; align-items:center; gap:12px; padding:12px 14px; background:transparent; border:none; text-align:left; font:inherit; color:inherit; }
+      .si-sev { width:3px; align-self:stretch; min-height:20px; background:var(--si-mint); border-radius:2px; }
+      .si-finding-name { flex:1; font-family:var(--si-mono); font-size:13px; font-weight:600; color:var(--si-text); }
+      .si-finding-meta { font-family:var(--si-mono); font-size:12px; color:var(--si-muted); }
+      .si-chevron { width:15px; height:15px; color:var(--si-faint); transition: transform 180ms ease; }
+      .si-chevron.is-open { transform: rotate(180deg); color: var(--si-mint); }
+      .si-finding-detail { padding:0 14px 13px 29px; display:flex; flex-direction:column; gap:7px; }
+      .si-line-tag { font-family:var(--si-mono); font-size:10.5px; letter-spacing:0.1em; text-transform:uppercase; color:var(--si-faint); }
+      .si-snippet { font-family:var(--si-mono); font-size:12px; color:#c9d1d9; background:#05070a; border:1px solid var(--si-border); border-left:2px solid var(--si-mint); border-radius:6px; padding:8px 10px; white-space:pre-wrap; word-break:break-all; }
+      .si-actions { display:flex; gap:8px; padding:4px 18px 18px; }
+      .si-btn { flex:1; text-align:center; font-family:var(--si-mono); font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.07em; white-space:nowrap; padding:10px 13px; border-radius:8px; border:1px solid transparent; }
+      .si-btn-ghost { background:transparent; border-color:var(--si-border); color:var(--si-muted); }
+      .si-btn-danger { background:transparent; border-color:rgba(255,107,107,0.4); color:var(--si-danger); }
+      .si-btn-mint { background:var(--si-mint); color:#05231f; border-color:var(--si-mint); }
+    </style>
+  </head>
+  <body>
+    <div class="icons">
+      <div><img src="icon/16.png" width="16" height="16" alt="" /><div class="cap">16</div></div>
+      <div><img src="icon/32.png" width="32" height="32" alt="" /><div class="cap">32</div></div>
+      <div><img src="icon/48.png" width="48" height="48" alt="" /><div class="cap">48</div></div>
+      <div><img src="icon/128.png" width="96" height="96" alt="" /><div class="cap">128</div></div>
+    </div>
+
+    <div class="si-hud">
+      <div class="si-top">
+        <span class="si-brand">
+          <svg width="22" height="22" viewBox="0 0 250 250" fill="none">
+            <path d="M 50,195 L 110,75" stroke="currentColor" stroke-width="28" stroke-linecap="round"/>
+            <path d="M 130,195 L 160,135" stroke="#72FFFF" stroke-width="28" stroke-linecap="round"/>
+            <circle cx="190" cy="75" r="14" fill="#72FFFF"/>
+          </svg>
+          <span class="si-wordmark">SecureIntent<span class="si-ai">.ai</span></span>
+        </span>
+        <button class="si-x">×</button>
+      </div>
+      <div class="si-rule"></div>
+      <ul class="si-findings">
+        <li class="si-finding">
+          <button class="si-finding-row">
+            <span class="si-sev"></span>
+            <span class="si-finding-name">OpenAI API key</span>
+            <span class="si-finding-meta">35 chars</span>
+            <svg class="si-chevron is-open" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <div class="si-finding-detail">
+            <span class="si-line-tag">line 3</span>
+            <code class="si-snippet">const AWS_KEY = '••••••'; // openai key</code>
+          </div>
+        </li>
+        <li class="si-finding">
+          <button class="si-finding-row">
+            <span class="si-sev"></span>
+            <span class="si-finding-name">AWS access key ID</span>
+            <span class="si-finding-meta">20 chars</span>
+            <svg class="si-chevron" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </li>
+      </ul>
+      <div class="si-actions">
+        <button class="si-btn si-btn-ghost">Cancel</button>
+        <button class="si-btn si-btn-danger">Paste anyway</button>
+        <button class="si-btn si-btn-mint">Paste redacted</button>
+      </div>
+    </div>
+  </body>
+</html>

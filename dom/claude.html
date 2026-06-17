@@ -1,0 +1,317 @@
+<div
+  class="!box-content flex flex-col bg-bg-000 mx-2 md:mx-0 items-stretch transition-all duration-200 relative z-10 rounded-[20px] cursor-text relative z-[1] border border-transparent md:w-full shadow-[0_0.25rem_1.25rem_hsl(var(--always-black)/3.5%),0_0_0_0.5px_hsla(var(--border-300)/0.15)] hover:shadow-[0_0.25rem_1.25rem_hsl(var(--always-black)/3.5%),0_0_0_0.5px_hsla(var(--border-200)/0.3)] focus-within:shadow-[0_0.25rem_1.25rem_hsl(var(--always-black)/7.5%),0_0_0_0.5px_hsla(var(--border-200)/0.3)] hover:focus-within:shadow-[0_0.25rem_1.25rem_hsl(var(--always-black)/7.5%),0_0_0_0.5px_hsla(var(--border-200)/0.3)]"
+>
+  <div class="flex flex-col m-3.5 gap-3">
+    <div class="relative font-large">
+      <div
+        class="w-full overflow-y-auto break-words transition-opacity duration-200 font-large max-h-96 min-h-[3rem] pl-[6px] pt-[6px] [&amp;_.is-editor-empty]:before:!content-['']"
+      >
+        <div
+          contenteditable="true"
+          role="textbox"
+          enterkeyhint="enter"
+          data-testid="chat-input"
+          aria-label="Write your prompt to Claude"
+          aria-multiline="true"
+          aria-required="false"
+          aria-invalid="false"
+          aria-describedby="legacy-model-warning-text claude-code-nudge-body"
+          translate="no"
+          class="tiptap ProseMirror"
+          tabindex="0"
+        >
+          <p
+            data-placeholder="How can I help you today?"
+            class="is-empty is-editor-empty before:content-[attr(data-placeholder)] before:!text-text-500 before:whitespace-nowrap"
+          >
+            <br class="ProseMirror-trailingBreak" />
+          </p>
+        </div>
+      </div>
+      <div
+        class="absolute inset-0 pointer-events-none overflow-hidden pl-1.5 pt-[5px]"
+      >
+        <span class="block text-text-500" style="opacity: 1"
+          >How can I help you today?</span
+        >
+      </div>
+    </div>
+    <div class="relative flex gap-2 w-full items-center">
+      <div class="relative shrink-0 flex items-center gap-1">
+        <div>
+          <button
+            type="button"
+            data-cds="Button"
+            class="cds-reset group/btn relative isolate inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap select-none border-0 outline-none rounded h-control font-sans text-body font-medium [&amp;:disabled:not([aria-busy])]:opacity-50 disabled:pointer-events-none transition-shadow duration-fast focus-visible:shadow-focus text-primary aria-pressed:text-accent aspect-square w-control px-0 ml-0.5"
+            aria-label="Add files, connectors, and more"
+            tabindex="0"
+            aria-haspopup="menu"
+            aria-expanded="false"
+            id="_r_v_"
+          >
+            <span
+              aria-hidden="true"
+              class="absolute -z-[1] rounded-[inherit] transition-colors duration-fast group-focus-visible/btn:shadow-[inset_0_0_0_1px_var(--cds-page-bg)] bg-transparent group-hover/btn:bg-fill-ghost-hover group-aria-expanded/btn:bg-fill-ghost-hover inset-0 group-aria-pressed/btn:bg-accent group-hover/btn:group-aria-pressed/btn:bg-accent cds-btn-squish"
+            ></span
+            ><span class="inline-flex items-center gap-1"
+              ><span
+                data-cds="Icon"
+                aria-hidden="true"
+                style="
+                  font-family: var(--font-anthropicons, Anthropicons-Variable);
+                  font-feature-settings: &quot;liga&quot; 0;
+                  font-optical-sizing: auto;
+                  font-style: normal;
+                  font-variation-settings: normal;
+                  line-height: 1;
+                  width: 1em;
+                  height: 1em;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  flex-shrink: 0;
+                  user-select: none;
+                  font-size: 20px;
+                  font-weight: 433.3;
+                "
+                ></span
+              ></span
+            >
+          </button>
+        </div>
+      </div>
+      <div class="flex flex-row items-center min-w-0 gap-1"></div>
+      <div class="grow"></div>
+      <div
+        class="flex items-center gap-2 min-w-0 transition-all duration-200 ease-out"
+      >
+        <span class="inline-flex min-w-0"
+          ><div
+            class="overflow-hidden min-w-0 p-1 -m-1"
+            style="opacity: 1; transform: none"
+          >
+            <button
+              class="inline-flex items-center justify-center relative isolate shrink-0 can-focus select-none disabled:pointer-events-none disabled:opacity-50 disabled:shadow-none disabled:drop-shadow-none border-transparent transition font-base duration-300 ease-[cubic-bezier(0.165,0.85,0.45,1)] h-8 rounded-md px-3 min-w-[4rem] whitespace-nowrap !text-xs pl-2.5 pr-2 gap-1 hover:!bg-bg-200 max-w-full _fill_10ocf_9 _ghost_10ocf_96"
+              type="button"
+              data-testid="model-selector-dropdown"
+              aria-label="Model: Opus 4.8 High"
+              tabindex="0"
+              aria-haspopup="menu"
+              aria-expanded="false"
+              id="_r_14_"
+            >
+              <div
+                class="inline-flex min-w-0 text-[14px] h-[14px] leading-none items-baseline"
+              >
+                <div
+                  class="min-w-0 overflow-x-clip text-ellipsis whitespace-nowrap select-none"
+                >
+                  Opus 4.8<span class="ml-1 text-text-500"> High</span>
+                </div>
+              </div>
+              <span
+                data-cds="Icon"
+                class="opacity-75"
+                aria-hidden="true"
+                style="
+                  font-family: var(--font-anthropicons, Anthropicons-Variable);
+                  font-feature-settings: &quot;liga&quot; 0;
+                  font-optical-sizing: auto;
+                  font-style: normal;
+                  font-variation-settings: normal;
+                  line-height: 1;
+                  width: 1em;
+                  height: 1em;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  flex-shrink: 0;
+                  user-select: none;
+                  font-size: 12px;
+                  font-weight: 577.8;
+                "
+                ></span
+              >
+            </button>
+          </div></span
+        >
+      </div>
+      <div class="shrink-0" style="opacity: 1; transform: none">
+        <div
+          class="flex items-center rounded-lg transition-colors duration-200"
+        >
+          <div class="overflow-hidden transition-all duration-150 ease-out w-0">
+            <div class="h-8 w-8">
+              <button
+                type="button"
+                class="h-8 w-8 rounded-lg flex items-center justify-center opacity-0 transition-all duration-200 text-text-300 hover:bg-bg-400 data-[popup-open]:bg-bg-400"
+                aria-label="Settings"
+                tabindex="0"
+                aria-haspopup="menu"
+                aria-expanded="false"
+                id="_r_18_"
+              >
+                <span class="flex items-center justify-center w-full h-full"
+                  ><span
+                    data-cds="Icon"
+                    aria-hidden="true"
+                    style="
+                      font-family: var(
+                        --font-anthropicons,
+                        Anthropicons-Variable
+                      );
+                      font-feature-settings: &quot;liga&quot; 0;
+                      font-optical-sizing: auto;
+                      font-style: normal;
+                      font-variation-settings: normal;
+                      line-height: 1;
+                      width: 1em;
+                      height: 1em;
+                      display: flex;
+                      align-items: center;
+                      justify-content: center;
+                      flex-shrink: 0;
+                      user-select: none;
+                      font-size: 12px;
+                      font-weight: 577.8;
+                    "
+                    ></span
+                  ></span
+                >
+              </button>
+            </div>
+          </div>
+          <button
+            type="button"
+            class="h-8 rounded-lg overflow-hidden flex items-center justify-center gap-1 transition-colors duration-200 cursor-pointer disabled:cursor-default px-1.5"
+            aria-label="Press and hold to record"
+          >
+            <span
+              class="flex items-center justify-center transition-colors duration-200 rounded-lg"
+              ><span
+                data-cds="Icon"
+                aria-hidden="true"
+                style="
+                  font-family: var(--font-anthropicons, Anthropicons-Variable);
+                  font-feature-settings: &quot;liga&quot; 0;
+                  font-optical-sizing: auto;
+                  font-style: normal;
+                  font-variation-settings: normal;
+                  line-height: 1;
+                  width: 1em;
+                  height: 1em;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  flex-shrink: 0;
+                  user-select: none;
+                  font-size: 20px;
+                  font-weight: 433.3;
+                "
+                ></span
+              ></span
+            >
+          </button>
+        </div>
+      </div>
+      <div
+        class="shrink-0 flex items-center transition-opacity w-8 z-10 justify-end"
+      >
+        <div style="opacity: 1; transform: none">
+          <div class="flex items-center gap-1 shrink-0">
+            <div
+              class="flex items-center rounded-lg transition-colors duration-200"
+            ></div>
+            <button
+              class="h-8 rounded-lg overflow-hidden flex items-center justify-center font-base-bold transition-colors duration-200 hover:bg-bg-300"
+              aria-label="Use voice mode"
+              tabindex="0"
+              style="padding-left: 6px; padding-right: 6px"
+            >
+              <span
+                class="h-5 relative flex items-center justify-center"
+                style="width: 20px"
+                ><span
+                  class="absolute inset-0 flex items-center justify-center"
+                  style="opacity: 1; filter: blur(0px); transform: none"
+                  ><svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 21.2 21.2"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                    class="inline-block overflow-visible"
+                  >
+                    <rect
+                      x="0"
+                      y="7.6"
+                      height="6px"
+                      fill="currentColor"
+                      fill-opacity="1"
+                      width="1.2px"
+                      rx="0.6"
+                      ry="0.6"
+                    ></rect>
+                    <rect
+                      x="3.9999999999999996"
+                      y="5.6"
+                      height="10px"
+                      fill="currentColor"
+                      fill-opacity="1"
+                      width="1.2px"
+                      rx="0.6"
+                      ry="0.6"
+                    ></rect>
+                    <rect
+                      x="8"
+                      y="2.5999999999999996"
+                      height="16px"
+                      fill="currentColor"
+                      fill-opacity="1"
+                      width="1.2px"
+                      rx="0.6"
+                      ry="0.6"
+                    ></rect>
+                    <rect
+                      x="12"
+                      y="5.6"
+                      height="10px"
+                      fill="currentColor"
+                      fill-opacity="1"
+                      width="1.2px"
+                      rx="0.6"
+                      ry="0.6"
+                    ></rect>
+                    <rect
+                      x="16"
+                      y="2.5999999999999996"
+                      height="16px"
+                      fill="currentColor"
+                      fill-opacity="1"
+                      width="1.2px"
+                      rx="0.6"
+                      ry="0.6"
+                    ></rect>
+                    <rect
+                      x="20"
+                      y="7.6"
+                      height="6px"
+                      fill="currentColor"
+                      fill-opacity="1"
+                      width="1.2px"
+                      rx="0.6"
+                      ry="0.6"
+                    ></rect></svg></span></span
+              ><span
+                class="absolute invisible whitespace-nowrap pl-2"
+                aria-hidden="true"
+              ></span
+              ><span class="overflow-hidden" style="width: 0px"></span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div></div>
+</div>

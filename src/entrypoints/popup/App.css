@@ -1,0 +1,161 @@
+:root {
+  /* SecureIntent brand palette (matches the overlay) */
+  --si-base: #050505; /* Base dark */
+  --si-cyan: #72ffff; /* Intent Cyan */
+  --si-navy: #052656; /* Secure navy */
+  --si-border: rgba(255, 255, 255, 0.08);
+  --si-text: #f4f6f8;
+  --si-muted: #8b949e;
+  /* Primary (logos & headers): Fira Code. Secondary (body): Inter. */
+  --si-mono: "Fira Code", ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  --si-sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+.si-pop {
+  background:
+    radial-gradient(120% 80% at 0% 0%, rgba(114, 255, 255, 0.07), transparent 60%), var(--si-base);
+  color: var(--si-text);
+  font-family: var(--si-sans);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Header ------------------------------------------------------------------ */
+.si-pop-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.si-brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.si-brand svg {
+  display: block;
+  flex-shrink: 0;
+  color: #ffffff;
+}
+.si-wordmark {
+  font-family: var(--si-mono); /* Fira Code */
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--si-text);
+}
+.si-accent {
+  color: var(--si-cyan);
+}
+.si-version {
+  font-family: var(--si-mono);
+  font-size: 11px;
+  color: var(--si-muted);
+  font-variant-numeric: tabular-nums;
+}
+/* Config row (subtle) ----------------------------------------------------- */
+.si-config {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #6b7480;
+}
+.si-config-label {
+  letter-spacing: 0.01em;
+}
+.si-config-ver {
+  font-family: var(--si-mono);
+  color: #8b94a3;
+}
+.si-refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--si-sans);
+  font-size: 11px;
+  color: #6b7480;
+  background: none;
+  border: none;
+  padding: 3px 5px;
+  margin-right: -5px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition:
+    color 150ms ease,
+    background 150ms ease;
+}
+.si-refresh svg {
+  width: 12px;
+  height: 12px;
+}
+.si-refresh:hover:not(:disabled) {
+  color: var(--si-cyan);
+  background: rgba(114, 255, 255, 0.07);
+}
+.si-refresh.is-syncing {
+  color: var(--si-cyan);
+}
+.si-refresh.is-syncing svg {
+  animation: si-spin 0.7s linear infinite;
+}
+@keyframes si-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .si-refresh.is-syncing svg {
+    animation: none;
+  }
+}
+
+/* Stat -------------------------------------------------------------------- */
+.si-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 0 6px;
+}
+.si-stat-num {
+  font-family: var(--si-mono); /* Fira Code */
+  font-size: 56px;
+  font-weight: 650;
+  line-height: 1;
+  color: var(--si-cyan);
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 28px rgba(114, 255, 255, 0.25);
+}
+.si-stat-label {
+  font-size: 12px;
+  color: var(--si-muted);
+  letter-spacing: 0.01em;
+}
+
+/* Footer ------------------------------------------------------------------ */
+.si-pop-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid var(--si-border);
+  padding-top: 12px;
+  font-size: 11px;
+  color: var(--si-muted);
+}
+.si-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--si-cyan);
+  text-decoration: none;
+  font-weight: 500;
+}
+.si-link:hover {
+  text-decoration: underline;
+}
+.si-link svg {
+  width: 13px;
+  height: 13px;
+}

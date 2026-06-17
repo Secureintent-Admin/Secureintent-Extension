@@ -1,0 +1,151 @@
+<div class="relative flex w-full max-w-(--breakpoint-md) min-w-0 flex-col">
+  <form class="w-full">
+    <div class="flex max-h-96 flex-col gap-4">
+      <div
+        class="relative flex min-h-0 cursor-text flex-col"
+        style="opacity: 1"
+      >
+        <div
+          class="bg-card flex min-h-0 flex-col overflow-hidden chat-input-card-module__g7PKlG__chat-input-bar border-default border dark:border-0 dark:shadow-none! rounded-[calc(var(--radius-xl)-1.5px)]"
+        >
+          <div
+            class="flex min-h-0 flex-col gap-3 p-3 shadow click-focus-input transition-colors duration-150 ease-in-out bg-card"
+            style="height: auto"
+          >
+            <div class="grid min-h-0 transition-all grid-rows-[auto_0px]">
+              <div
+                class="@container/chat-input-row min-h-0 min-w-0 flex items-center gap-2"
+              >
+                <div style="opacity: 1; transform: none">
+                  <button
+                    aria-disabled="true"
+                    type="button"
+                    class="flex items-center justify-center text-center font-medium cursor-pointer outline-hidden focus-visible:ring-3 relative whitespace-nowrap transition-[background-color,border-color,color,fill,stroke,scale] focus-visible:ring-default focus-visible:ring-offset-1 aria-disabled:cursor-not-allowed aria-busy:cursor-wait aria-busy:text-transparent aria-disabled:aria-busy:text-transparent bg-state-secondary hover:not-disabled:bg-state-secondary-hover active:not-disabled:bg-state-secondary-press aria-busy:bg-state-secondary-loading border-darker border-[0.5px] aria-disabled:text-muted gap-1 text-sm p-0 rounded-md motion-safe:[&amp;:active:not(:disabled):not([aria-disabled=true]):not([aria-busy=true])]:scale-[98.5%] size-8 text-icon-default-subtle shrink-0"
+                    aria-label="Open settings menu"
+                    data-state="closed"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-plus size-4"
+                      aria-hidden="true"
+                    >
+                      <path d="M5 12h14"></path>
+                      <path d="M12 5v14"></path>
+                    </svg>
+                  </button>
+                </div>
+                <div
+                  class="grow overflow-y-auto"
+                  style="transform: none; transform-origin: 50% 50% 0px"
+                >
+                  <button type="submit" hidden=""></button>
+                  <div class="caret-brand-500 px-0.5 break-words">
+                    <div
+                      style="--first-line-indentation: 0px"
+                      contenteditable="true"
+                      autocomplete="off"
+                      autocorrect="off"
+                      autocapitalize="off"
+                      translate="no"
+                      class="ProseMirror"
+                      data-placeholder="Ask anything"
+                    >
+                      <p><br class="ProseMirror-trailingBreak" /></p>
+                    </div>
+                  </div>
+                </div>
+                <div style="opacity: 1; transform: none">
+                  <span class="inline-flex" data-state="closed"
+                    ><button
+                      aria-disabled="true"
+                      type="button"
+                      class="flex items-center justify-center text-center font-medium cursor-pointer outline-hidden focus-visible:ring-3 relative whitespace-nowrap transition-[background-color,border-color,color,fill,stroke,scale] focus-visible:ring-default focus-visible:ring-offset-1 aria-disabled:text-hint aria-disabled:cursor-not-allowed aria-busy:cursor-wait aria-busy:text-transparent aria-disabled:aria-busy:text-transparent bg-state-ghost hover:not-disabled:bg-state-ghost-hover active:not-disabled:bg-state-ghost-press h-8 gap-1 px-2.5 text-sm rounded-md motion-safe:[&amp;:active:not(:disabled):not([aria-disabled=true]):not([aria-busy=true])]:scale-[98.5%] text-muted"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-brain in-aria-busy:text-transparent size-4 inline @lg/chat-input-row:hidden"
+                        aria-hidden="true"
+                      >
+                        <path d="M12 18V5"></path>
+                        <path
+                          d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4"
+                        ></path>
+                        <path
+                          d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5"
+                        ></path>
+                        <path d="M17.997 5.125a4 4 0 0 1 2.526 5.77"></path>
+                        <path d="M18 18a4 4 0 0 0 2-7.464"></path>
+                        <path
+                          d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517"
+                        ></path>
+                        <path d="M6 18a4 4 0 0 1-2-7.464"></path>
+                        <path d="M6.003 5.125a4 4 0 0 0-2.526 5.77"></path></svg
+                      ><span class="hidden @lg/chat-input-row:inline">Fast</span
+                      ><svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-chevron-down in-aria-busy:text-transparent size-4 text-icon-default-subtle"
+                        aria-hidden="true"
+                      >
+                        <path d="m6 9 6 6 6-6"></path>
+                      </svg></button
+                  ></span>
+                </div>
+                <div style="opacity: 1; transform: none">
+                  <button
+                    aria-disabled="false"
+                    aria-busy="false"
+                    type="button"
+                    class="flex items-center justify-center text-center font-medium cursor-pointer outline-hidden focus-visible:ring-3 relative whitespace-nowrap transition-[background-color,border-color,color,fill,stroke,scale] focus-visible:ring-default focus-visible:ring-offset-1 aria-disabled:text-hint aria-disabled:cursor-not-allowed aria-busy:cursor-wait aria-busy:text-transparent aria-disabled:aria-busy:text-transparent text-inverted-default bg-state-primary hover:not-disabled:bg-state-primary-hover active:not-disabled:bg-state-primary-press aria-busy:bg-state-primary-loading inset-shadow-components-default aria-disabled:bg-state-disabled gap-1 text-sm p-0 rounded-md motion-safe:[&amp;:active:not(:disabled):not([aria-disabled=true]):not([aria-busy=true])]:scale-[98.5%] size-8"
+                    aria-label="Voice Mode"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-mic"
+                      aria-hidden="true"
+                    >
+                      <path d="M12 19v3"></path>
+                      <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                      <rect x="9" y="2" width="6" height="13" rx="3"></rect>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>

@@ -1,0 +1,38 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+coverage
+stats.html
+stats-*.json
+.wxt
+web-ext.config.ts
+
+# Playwright
+/test-results/
+/playwright-report/
+
+# Saved login profile for live e2e (session cookies — sensitive)
+/.auth/
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+
+PROJECT.MD
+CLAUDE.md

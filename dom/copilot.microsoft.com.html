@@ -1,0 +1,170 @@
+<div
+  class="relative max-h-full min-h-composer min-w-16 max-w-chat rounded-5xl"
+  style="opacity: 1"
+>
+  <div
+    class="pointer-events-none absolute inset-0"
+    style="
+      opacity: 1;
+      border-radius: 32px;
+      box-shadow: rgba(0, 0, 0, 0.12) 0px 16px 48px 0px;
+    "
+  ></div>
+  <div
+    data-testid="composer-background"
+    class="relative shadow-tinted-xl backdrop-blur-2xl backdrop-saturate-200 bg-accent-100/60 dark:bg-muted-200/50"
+    style="
+      opacity: 1;
+      border-radius: 32px;
+      box-shadow: rgba(0, 0, 0, 0.16) 0px 16px 24px 0px;
+    "
+  >
+    <div
+      class="pointer-events-auto relative flex flex-col overflow-hidden contrast-more:border-2"
+      data-testid="composer-content"
+      style="
+        opacity: 1;
+        border-radius: 32px;
+        box-shadow: rgba(255, 255, 255, 0.08) 0px 0px 0px 1px inset;
+      "
+    >
+      <div
+        class="relative max-h-full w-expanded-composer max-w-chat bg-gradient-to-b p-1.5 from-background-400/5 to-background-400/8 dark:from-background-200/65 dark:to-background-200/65"
+        style="
+          border-radius: 32px;
+          box-shadow: rgba(255, 255, 255, 0.08) 0px 0px 0px 1px inset;
+        "
+      >
+        <div
+          class="bg-white/90 dark:bg-background-100/45"
+          style="border-radius: 26px"
+        >
+          <div
+            class="relative flex grow flex-col overflow-hidden before:absolute before:inset-0 before:rounded-3xl before:border-2 before:border-stroke-350 w-auto rounded-3xl contrast-more:border-2 before:opacity-0"
+          >
+            <div class="w-full h-0"></div>
+            <div class="relative flex min-h-0 grow flex-col">
+              <div class="flex items-end min-h-0 w-auto grow mt-1">
+                <div class="relative grow overflow-hidden">
+                  <div
+                    class="relative flex size-full cursor-text overflow-hidden text-black dark:text-white"
+                  >
+                    <div class="flex grow flex-col gap-4 py-user-input">
+                      <div
+                        class="t-custom-scrollbar scrollbar-stable overflow-y-auto px-4 max-h-user-input-shallow"
+                      >
+                        <div class="relative">
+                          <label class="sr-only" for="userInput"
+                            >Message Copilot</label
+                          ><textarea
+                            class="font-ligatures-none inline-block h-user-input w-full resize-none overflow-y-hidden whitespace-pre-wrap bg-transparent align-top text-black outline-none placeholder:text-foreground-450 dark:text-white dark:placeholder:text-foreground-600/90 text-base-dense"
+                            placeholder="Message Copilot"
+                            id="userInput"
+                            role="textbox"
+                            aria-autocomplete="both"
+                            spellcheck="false"
+                            enterkeyhint="enter"
+                            autofocus=""
+                            data-testid="composer-input"
+                            style="height: 22px !important"
+                          ></textarea>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div
+                  class="relative bottom-0 my-1.5 flex h-9 items-center w-0"
+                ></div>
+              </div>
+            </div>
+          </div>
+          <div
+            class="relative bottom-0 flex justify-between pb-0.5 pe-2.5 ps-1.5"
+          >
+            <div class="flex h-11 items-center gap-2 ps-1">
+              <div class="relative">
+                <div class="relative">
+                  <button
+                    id="composer-create-button"
+                    aria-expanded="false"
+                    aria-haspopup="menu"
+                    aria-label="Attach files, connect apps, or make something with Copilot."
+                    type="button"
+                    class="relative flex items-center text-foreground-800 fill-foreground-800 active:text-foreground-600 active:fill-foreground-600 dark:active:text-foreground-650 dark:active:fill-foreground-650 bg-transparent safe-hover:bg-black/5 active:bg-black/3 dark:safe-hover:bg-black/30 dark:active:bg-black/20 text-sm justify-center min-h-9 min-w-9 after:rounded-xl after:absolute after:inset-0 after:pointer-events-none after:border after:border-transparent after:contrast-more:border-2 outline-2 outline-offset-1 focus-visible:z-[1] focus-visible:outline focus-visible:outline-stroke-900 forced-colors:transition-none forced-colors:safe-hover:!bg-[Highlight] forced-colors:safe-hover:!text-[HighlightText] forced-colors:safe-hover:!fill-[HighlightText] forced-colors:active:!bg-[Highlight] forced-colors:active:!text-[HighlightText] forced-colors:active:!fill-[HighlightText] h-9 select-none gap-1 rounded-2xl border border-black/8 dark:border-white/8 p-0"
+                    title="Attach files, connect apps, or make something with Copilot."
+                    data-testid="composer-create-button"
+                    data-spatial-navigation-autofocus="false"
+                  >
+                    <div
+                      class="bg-current forced-color-adjust-none forced-colors:bg-[ButtonText] size-6"
+                      style="
+                        -webkit-mask-image: url(/static/cmc/assets/add-BTcFT5ig.svg);
+                        mask-image: url(/static/cmc/assets/add-BTcFT5ig.svg);
+                        -webkit-mask-repeat: no-repeat;
+                        mask-repeat: no-repeat;
+                        -webkit-mask-position: center;
+                        mask-position: center;
+                        -webkit-mask-size: contain;
+                        mask-size: contain;
+                      "
+                    ></div>
+                  </button>
+                </div>
+              </div>
+              <div class="relative">
+                <button
+                  aria-expanded="false"
+                  aria-haspopup="menu"
+                  aria-label="Response mode, Smart"
+                  type="button"
+                  class="relative flex items-center text-foreground-800 fill-foreground-800 active:text-foreground-600 active:fill-foreground-600 dark:active:text-foreground-650 dark:active:fill-foreground-650 bg-transparent safe-hover:bg-black/5 active:bg-black/3 dark:safe-hover:bg-black/30 dark:active:bg-black/20 text-sm justify-center min-h-9 min-w-9 px-2.5 py-1 after:rounded-xl after:absolute after:inset-0 after:pointer-events-none after:border after:border-transparent after:contrast-more:border-2 outline-2 outline-offset-1 focus-visible:z-[1] focus-visible:outline focus-visible:outline-stroke-900 forced-colors:transition-none forced-colors:safe-hover:!bg-[Highlight] forced-colors:safe-hover:!text-[HighlightText] forced-colors:safe-hover:!fill-[HighlightText] forced-colors:active:!bg-[Highlight] forced-colors:active:!text-[HighlightText] forced-colors:active:!fill-[HighlightText] h-9 select-none gap-1 rounded-2xl border border-black/8 dark:border-white/8 ps-2.5 pe-2.5"
+                  title="Smart"
+                  data-testid="composer-chat-mode-smart-button"
+                  data-spatial-navigation-autofocus="false"
+                >
+                  <span class="text-sm">Smart</span
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    xmlns="http://www.w3.org/2000/svg"
+                    class="size-4 rotate-90"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M8.46967 4.21967C8.17678 4.51256 8.17678 4.98744 8.46967 5.28033L15.1893 12L8.46967 18.7197C8.17678 19.0126 8.17678 19.4874 8.46967 19.7803C8.76256 20.0732 9.23744 20.0732 9.53033 19.7803L16.7803 12.5303C17.0732 12.2374 17.0732 11.7626 16.7803 11.4697L9.53033 4.21967C9.23744 3.92678 8.76256 3.92678 8.46967 4.21967Z"
+                    ></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <div class="relative">
+                <button
+                  aria-label="Talk to Copilot"
+                  type="button"
+                  class="relative flex items-center text-foreground-800 fill-foreground-800 active:text-foreground-600 active:fill-foreground-600 dark:active:text-foreground-650 dark:active:fill-foreground-650 bg-transparent safe-hover:bg-black/5 active:bg-black/3 dark:safe-hover:bg-black/30 dark:active:bg-black/20 text-sm justify-center min-h-9 min-w-9 after:rounded-xl after:absolute after:inset-0 after:pointer-events-none after:border after:border-transparent after:contrast-more:border-2 outline-2 outline-offset-1 focus-visible:z-[1] focus-visible:outline focus-visible:outline-stroke-900 forced-colors:transition-none forced-colors:safe-hover:!bg-[Highlight] forced-colors:safe-hover:!text-[HighlightText] forced-colors:safe-hover:!fill-[HighlightText] forced-colors:active:!bg-[Highlight] forced-colors:active:!text-[HighlightText] forced-colors:active:!fill-[HighlightText] h-9 select-none gap-1 rounded-2xl p-0"
+                  title="Talk to Copilot"
+                  data-testid="audio-call-button"
+                  data-spatial-navigation-autofocus="false"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    xmlns="http://www.w3.org/2000/svg"
+                    class="size-6"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M12.0001 3C12.3798 3 12.6936 3.28215 12.7433 3.64823L12.7501 3.75V20.25C12.7501 20.6642 12.4143 21 12.0001 21C11.6204 21 11.3066 20.7178 11.257 20.3518L11.2501 20.25V3.75C11.2501 3.33579 11.5859 3 12.0001 3ZM8.25505 6C8.63475 6 8.94854 6.28215 8.99821 6.64823L9.00505 6.75V17.25C9.00505 17.6642 8.66927 18 8.25505 18C7.87536 18 7.56156 17.7178 7.5119 17.3518L7.50505 17.25V6.75C7.50505 6.33579 7.84084 6 8.25505 6ZM15.7452 6C16.1249 6 16.4387 6.28215 16.4883 6.64823L16.4952 6.75V17.25C16.4952 17.6642 16.1594 18 15.7452 18C15.3655 18 15.0517 17.7178 15.002 17.3518L14.9952 17.25V6.75C14.9952 6.33579 15.3309 6 15.7452 6ZM4.75122 9C5.13092 9 5.44471 9.28215 5.49437 9.64823L5.50122 9.75V14.25C5.50122 14.6642 5.16543 15 4.75122 15C4.37152 15 4.05773 14.7178 4.00807 14.3518L4.00122 14.25V9.75C4.00122 9.33579 4.33701 9 4.75122 9ZM19.2523 9C19.632 9 19.9458 9.28215 19.9955 9.64823L20.0023 9.75V14.2487C20.0023 14.6629 19.6665 14.9987 19.2523 14.9987C18.8726 14.9987 18.5588 14.7165 18.5091 14.3504L18.5023 14.2487V9.75C18.5023 9.33579 18.8381 9 19.2523 9Z"
+                    ></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

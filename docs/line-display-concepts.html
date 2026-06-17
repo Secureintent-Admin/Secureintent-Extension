@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SecureIntent · snippet format, better UX</title>
+    <style>
+      :root {
+        --border: rgba(255, 255, 255, 0.08);
+        --mint: #7df9e4;
+        --text: #f4f6f8;
+        --muted: #8b949e;
+        --faint: #5a626b;
+        --danger: #ff6b6b;
+        --snip-bg: #05070a;
+        --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+        --sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: radial-gradient(1000px 500px at 50% -10%, #0e1620, #050608 60%);
+        color: var(--text); font-family: var(--sans); -webkit-font-smoothing: antialiased;
+        padding: 48px 24px 96px;
+      }
+      .page { max-width: 1100px; margin: 0 auto; }
+      h1 { font-size: 21px; font-weight: 650; letter-spacing: -0.02em; text-align: center; margin: 0 0 6px; }
+      .lede { color: var(--muted); font-size: 13.5px; text-align: center; margin: 0 0 8px; }
+      .lede code { font-family: var(--mono); color: var(--mint); }
+      .note { text-align:center; font-family:var(--mono); font-size:11.5px; color:var(--faint); margin: 0 0 36px; }
+
+      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(470px, 1fr)); gap: 26px; }
+      .variant { display: flex; flex-direction: column; gap: 12px; }
+      .vhead { display: flex; align-items: baseline; gap: 10px; }
+      .vtag { font-family: var(--mono); font-size: 11px; font-weight: 700; color: #05231f; background: var(--mint); border-radius: 6px; padding: 3px 8px; }
+      .vname { font-size: 14.5px; font-weight: 600; letter-spacing: -0.01em; }
+      .vwhy { color: var(--muted); font-size: 12.5px; line-height: 1.55; margin: 0; }
+      .vwhy b { color: var(--text); font-weight: 600; }
+
+      /* real card chrome (unchanged) */
+      .finding { background: #0c1014; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+      .finding-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; }
+      .sev { width: 3px; align-self: stretch; min-height: 20px; background: var(--mint); border-radius: 2px; }
+      .finding-name { flex: 1; font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--text); }
+      .finding-meta { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+      .chev { width: 15px; height: 15px; color: var(--mint); transform: rotate(180deg); }
+      .detail { padding: 4px 14px 14px 29px; display: flex; flex-direction: column; gap: 8px; }
+      .cap { font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--faint); }
+
+      .mask {
+        color: var(--mint); background: rgba(125,249,228,0.14);
+        border-radius: 3px; padding: 1px 5px; letter-spacing: 0.08em;
+        box-shadow: inset 0 0 0 1px rgba(125,249,228,0.3);
+      }
+
+      /* base snippet */
+      .snip {
+        font-family: var(--mono); font-size: 12.5px; line-height: 1.6;
+        background: var(--snip-bg); border: 1px solid var(--border);
+        border-radius: 8px; padding: 9px 12px; color: #c9d1d9;
+      }
+
+      /* CURRENT ref */
+      .ref { max-width: 480px; margin: 0 auto 8px; }
+      .snip-current { white-space: pre-wrap; word-break: break-all; border-left: 2px solid var(--mint); }
+      .ell { color: var(--faint); }
+      .refnote { text-align:center; font-family:var(--mono); font-size:11px; color:var(--faint); margin: 6px 0 34px; }
+
+      /* A — edge fade, no ellipsis char */
+      .snip-fade {
+        position: relative; white-space: nowrap; overflow: hidden;
+        -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 24px, #000 calc(100% - 24px), transparent 100%);
+        mask-image: linear-gradient(90deg, transparent 0, #000 24px, #000 calc(100% - 24px), transparent 100%);
+        border-left: 2px solid var(--mint);
+      }
+      .snip-fade .inner { display: inline-block; padding: 0 6px; }
+
+      /* B — dimmed context, bright secret */
+      .snip-dim { white-space: pre-wrap; word-break: break-word; border-left: 2px solid var(--mint); }
+      .snip-dim .ctx { color: var(--faint); }
+
+      /* C — outgoing preview, label + chip */
+      .snip-quote {
+        white-space: pre-wrap; word-break: break-word;
+        border: 1px solid var(--border); border-left: 2px solid var(--mint);
+        position: relative;
+      }
+      .chip {
+        display: inline-flex; align-items: center; gap: 5px;
+        font-family: var(--mono); font-size: 11.5px; color: var(--mint);
+        background: rgba(125,249,228,0.12); border: 1px solid rgba(125,249,228,0.4);
+        border-radius: 5px; padding: 0 6px;
+      }
+      .chip svg { width: 11px; height: 11px; }
+
+      /* D — centered on secret, symmetric */
+      .snip-center {
+        display: flex; align-items: center; gap: 0; white-space: nowrap; overflow: hidden;
+        border-left: 2px solid var(--mint);
+      }
+      .snip-center .side {
+        flex: 1; min-width: 0; color: var(--faint);
+        overflow: hidden; text-overflow: ellipsis;
+      }
+      .snip-center .side.l { text-align: right; direction: rtl; }
+      .snip-center .mask { flex: none; margin: 0 8px; }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <h1>Same context text — better format</h1>
+      <p class="lede">Source line: <code>Hey can you debug this? my key is sk-…012345 and it 401s.</code></p>
+      <p class="note">Keeping the surrounding sentence — fixing how the window + mask are presented.</p>
+
+      <!-- CURRENT -->
+      <div class="ref">
+        <div class="finding">
+          <div class="finding-row">
+            <span class="sev"></span><span class="finding-name">OpenAI API key</span><span class="finding-meta">35 chars</span>
+            <svg class="chev" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="detail">
+            <span class="cap">line 1</span>
+            <code class="snip snip-current"><span class="ell">…</span>y can you debug this? my key is ****** and it 401s.</code>
+          </div>
+        </div>
+      </div>
+      <p class="refnote">▲ current — note the ugly leading “…y” and dead grey ****** </p>
+
+      <div class="grid">
+        <!-- A -->
+        <section class="variant">
+          <div class="vhead"><span class="vtag">A</span><span class="vname">Edge-fade window</span></div>
+          <p class="vwhy"><b>The box fades out at both edges instead of printing a “…” character.</b> Truncation reads as a soft gradient, never a chopped mid-word glyph. Secret is a highlighted chip. <b>This is the direct fix for what you disliked.</b></p>
+          <div class="finding">
+            <div class="finding-row">
+              <span class="sev"></span><span class="finding-name">OpenAI API key</span><span class="finding-meta">35 chars</span>
+              <svg class="chev" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <div class="detail">
+              <span class="cap">line 1</span>
+              <code class="snip snip-fade"><span class="inner">debug this? my key is <span class="mask">●●●●●●</span> and it 401s.</span></code>
+            </div>
+          </div>
+        </section>
+
+        <!-- B -->
+        <section class="variant">
+          <div class="vhead"><span class="vtag">B</span><span class="vname">Dimmed context, bright secret</span></div>
+          <p class="vwhy"><b>Surrounding words go faint; the masked secret is the only thing lit up.</b> Pure visual hierarchy — context is just orientation, the eye snaps to the secret. Wraps cleanly, no truncation needed.</p>
+          <div class="finding">
+            <div class="finding-row">
+              <span class="sev"></span><span class="finding-name">OpenAI API key</span><span class="finding-meta">35 chars</span>
+              <svg class="chev" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <div class="detail">
+              <span class="cap">line 1</span>
+              <code class="snip snip-dim"><span class="ctx">…my key is </span><span class="mask">●●●●●●</span><span class="ctx"> and it 401s.</span></code>
+            </div>
+          </div>
+        </section>
+
+        <!-- C -->
+        <section class="variant">
+          <div class="vhead"><span class="vtag">C</span><span class="vname">Outgoing preview + chip</span></div>
+          <p class="vwhy"><b>Reframe the box as “what ChatGPT will receive”, secret swapped for a labelled lock chip.</b> Connects the snippet to the action (“Paste redacted” produces exactly this). Full sentence, wraps.</p>
+          <div class="finding">
+            <div class="finding-row">
+              <span class="sev"></span><span class="finding-name">OpenAI API key</span><span class="finding-meta">35 chars</span>
+              <svg class="chev" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <div class="detail">
+              <span class="cap">ChatGPT would receive · line 1</span>
+              <code class="snip snip-quote">…my key is <span class="chip"><svg viewBox="0 0 24 24" fill="none"><rect x="5" y="11" width="14" height="9" rx="2" stroke="currentColor" stroke-width="2"/><path d="M8 11V8a4 4 0 018 0v3" stroke="currentColor" stroke-width="2"/></svg>hidden</span> and it 401s.</code>
+            </div>
+          </div>
+        </section>
+
+        <!-- D -->
+        <section class="variant">
+          <div class="vhead"><span class="vtag">D</span><span class="vname">Secret-centered, symmetric fade</span></div>
+          <p class="vwhy"><b>Secret sits dead-center; equal context fades away left and right.</b> Always balanced regardless of where the key falls in the line — no lopsided “…y” start. Single row, scales to any length.</p>
+          <div class="finding">
+            <div class="finding-row">
+              <span class="sev"></span><span class="finding-name">OpenAI API key</span><span class="finding-meta">35 chars</span>
+              <svg class="chev" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <div class="detail">
+              <span class="cap">line 1</span>
+              <code class="snip snip-center">
+                <span class="side l">&#x200E;Hey can you debug this? my key is </span>
+                <span class="mask">●●●●●●</span>
+                <span class="side r"> and it 401s.</span>
+              </code>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <p class="note" style="margin-top:38px; color:var(--muted)">All keep the masked sentence — only presentation changes. <b style="color:var(--text)">A</b> kills the “…” glyph (your exact complaint); <b style="color:var(--text)">B</b> is the smallest, highest-clarity change.</p>
+    </div>
+  </body>
+</html>

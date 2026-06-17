@@ -1,0 +1,8 @@
+allowBuilds:
+  esbuild: true
+  sharp: true
+  spawn-sync: false
+minimumReleaseAgeExclude:
+  - tinyexec@1.2.1
+overrides:
+  tinyexec: 1.2.1

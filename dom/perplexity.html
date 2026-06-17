@@ -1,0 +1,310 @@
+<div class="w-full relative z-10">
+  <div class="relative">
+    <div class="bg-base rounded-2xl" data-ask-input-container="true">
+      <div
+        class="relative rounded-2xl border-subtlest ring-subtlest divide-subtlest bg-base"
+      >
+        <div class="">
+          <span class="grow block"
+            ><div class="relative isolate rounded-2xl">
+              <div
+                class="bg-raised dark:bg-subtlest w-full outline-none flex items-center border rounded-2xl duration-75 transition-all border-subtle shadow-sm dark:shadow-md shadow-black/5 px-0 pt-3 pb-3 relative z-[1] gap-y-md grid items-center"
+              >
+                <div class="px-3 grid-rows-1fr-auto grid grid-cols-[1fr_auto]">
+                  <div
+                    class="overflow-hidden relative flex h-full col-start-1 col-end-3 pb-2 ml-2 mt-1"
+                  >
+                    <div class="w-full" style="min-height: 3em">
+                      <div
+                        class="overflow-auto max-h-[45vh] lg:max-h-[40vh] sm:max-h-[25vh] outline-none font-sans resize-none caret-super selection:bg-super/30 selection:text-foreground dark:selection:bg-super/10 dark:selection:text-super text-foreground bg-transparent placeholder-quieter placeholder:select-none scrollbar-subtle size-full"
+                        contenteditable="true"
+                        id="ask-input"
+                        role="textbox"
+                        spellcheck="true"
+                        aria-placeholder="Type @ for connectors and sources"
+                        style="
+                          min-height: 3em;
+                          max-height: 15em;
+                          user-select: text;
+                          white-space: pre-wrap;
+                          word-break: break-word;
+                        "
+                        data-lexical-editor="true"
+                      >
+                        <p dir="auto"><br /></p>
+                      </div>
+                      <div aria-hidden="true">
+                        <div
+                          class="absolute inset-0 pointer-events-none select-none text-quieter line-clamp-2 overflow-hidden max-h-[3em]"
+                        >
+                          <div
+                            style="
+                              opacity: 0.415868;
+                              transform: translateY(-3.50479px);
+                              position: absolute;
+                              inset: 0px;
+                            "
+                          >
+                            Ask anything…
+                          </div>
+                          <div
+                            style="
+                              opacity: 0.584132;
+                              transform: translateY(2.49521px);
+                              position: absolute;
+                              inset: 0px;
+                            "
+                          >
+                            Type @ for connectors and sources
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div
+                    class="gap-sm flex overflow-hidden min-w-0 col-start-1 row-start-2"
+                  >
+                    <div class="gap-sm flex items-center min-w-0">
+                      <input
+                        multiple=""
+                        accept=".bash,.bat,.c,.coffee,.conf,.config,.cpp,.cs,.css,.csv,.cxx,.dart,.diff,.doc,.docx,.fish,.go,.h,.hpp,.htm,.html,.in,.ini,.ipynb,.java,.js,.json,.jsx,.ksh,.kt,.kts,.latex,.less,.log,.lua,.m,.markdown,.md,.pdf,.php,.pl,.pm,.pptx,.py,.r,.R,.rb,.rmd,.rs,.scala,.sh,.sql,.swift,.t,.tex,.text,.toml,.ts,.tsx,.txt,.xlsx,.xml,.yaml,.yml,.zsh,.jpeg,.jpg,.jpe,.jp2,.png,.gif,.bmp,.tiff,.tif,.svg,.webp,.ico,.avif,.heic,.heif,.mp3,.wav,.aiff,.ogg,.flac,.mp4,.mpeg,.mov,.avi,.flv,.mpg,.webm,.wmv,.3gp"
+                        type="file"
+                        style="display: none"
+                      /><button
+                        aria-expanded="false"
+                        aria-haspopup="menu"
+                        data-state="closed"
+                        aria-label="Add files or tools"
+                        type="button"
+                        class="reset interactable-alt select-none [-webkit-user-drag:none] outline-none font-semimedium transition-[background-color,border-color,transform,color,opacity] duration-300 ease-out font-sans text-center items-center justify-center leading-loose whitespace-nowrap disabled:cursor-default disabled:opacity-50 data-[state=open]:text-foreground data-[state=open]:bg-quiet h-8 text-sm cursor-pointer origin-center active:scale-[0.97] active:duration-150 active:ease-outExpo inline-flex rounded-full aspect-square p-0 aspect-[9/8] text-quiet hover:text-foreground hover:bg-quiet"
+                      >
+                        <div class="relative flex items-center justify-center">
+                          <div
+                            class="inline-flex"
+                            style="opacity: 1; transition: opacity 150ms 150ms"
+                          >
+                            <svg
+                              role="img"
+                              class="inline-flex fill-current shrink-0"
+                              width="16"
+                              height="16"
+                              stroke-width="1.75"
+                            >
+                              <use
+                                xlink:href="#pplx-icon-custom-plus-large"
+                              ></use>
+                            </svg>
+                          </div>
+                          <div
+                            class="absolute inset-0 flex items-center justify-center"
+                            style="opacity: 0; transition: opacity 150ms"
+                          ></div>
+                        </div>
+                      </button>
+                      <div
+                        class="relative flex items-center flex-shrink-0 gap-0 rounded-full transition-colors duration-quick bg-subtle"
+                      >
+                        <div
+                          aria-hidden="true"
+                          data-testid="ask-input-mode-toggle-indicator"
+                          class="pointer-events-none absolute left-0 top-0 z-0 h-full rounded-full border border-subtle bg-raised"
+                          style="
+                            opacity: 1;
+                            transform: translateX(0px);
+                            width: calc(100% - 36px);
+                          "
+                        ></div>
+                        <span
+                          class="relative z-[1] inline-flex flex-none overflow-hidden rounded-full"
+                          style="width: auto"
+                          ><span class="inline-flex w-max"
+                            ><button
+                              aria-pressed="true"
+                              id="radix-_r_o_"
+                              aria-haspopup="menu"
+                              aria-expanded="false"
+                              data-state="closed"
+                              type="button"
+                              class="reset interactable-alt inline-flex select-none h-8 max-w-full items-center border text-sm transition-colors duration-150 cursor-pointer rounded-full gap-1 pl-sm pr-[12px] bg-quiet border-transparent text-foreground relative gap-0 pr-sm overflow-visible !border-solid !border-transparent !bg-transparent hover:!bg-transparent !bg-transparent"
+                              style="min-width: 36px"
+                            >
+                              <span class="inline-flex items-center p-two"
+                                ><svg
+                                  role="img"
+                                  class="inline-flex fill-current shrink-0"
+                                  width="14"
+                                  height="14"
+                                  stroke-width="1.75"
+                                >
+                                  <use
+                                    xlink:href="#pplx-icon-search"
+                                  ></use></svg></span
+                              ><span
+                                aria-hidden="false"
+                                class="inline-flex items-center gap-1 whitespace-nowrap"
+                                style="opacity: 1"
+                                >Search<svg
+                                  role="img"
+                                  class="inline-flex fill-current shrink-0"
+                                  width="14"
+                                  height="14"
+                                  stroke-width="1.75"
+                                >
+                                  <use
+                                    xlink:href="#pplx-icon-chevron-down"
+                                  ></use></svg
+                              ></span></button></span></span
+                        ><span
+                          class="relative z-[1] inline-flex flex-none overflow-hidden rounded-full"
+                          style="width: 36px"
+                          ><span class="inline-flex w-max"
+                            ><span
+                              class="inline-flex"
+                              data-state="closed"
+                              style="width: 36px"
+                              ><button
+                                aria-pressed="false"
+                                aria-label="Computer"
+                                type="button"
+                                class="reset interactable-alt inline-flex select-none h-8 max-w-full items-center border text-sm transition-colors duration-150 cursor-pointer rounded-full gap-1 pl-sm pr-[12px] border-dashed bg-transparent border-subtle hover:bg-subtle relative gap-0 pr-sm overflow-visible !border-solid !border-transparent !bg-transparent hover:!bg-transparent"
+                                style="min-width: 36px; width: 36px"
+                              >
+                                <span class="inline-flex items-center p-two"
+                                  ><svg
+                                    role="img"
+                                    class="inline-flex fill-current shrink-0"
+                                    width="14"
+                                    height="14"
+                                    stroke-width="1.75"
+                                  >
+                                    <use
+                                      xlink:href="#pplx-icon-custom-computer"
+                                    ></use></svg></span
+                                ><span
+                                  aria-hidden="true"
+                                  class="inline-flex items-center gap-1 whitespace-nowrap"
+                                  style="opacity: 0"
+                                  >Computer<svg
+                                    role="img"
+                                    class="inline-flex fill-current shrink-0"
+                                    width="14"
+                                    height="14"
+                                    stroke-width="1.75"
+                                  >
+                                    <use
+                                      xlink:href="#pplx-icon-chevron-down"
+                                    ></use></svg
+                                ></span></button></span></span
+                        ></span>
+                      </div>
+                    </div>
+                  </div>
+                  <div
+                    class="flex items-center justify-self-end gap-sm col-start-2 row-start-2"
+                  >
+                    <div class="inline-flex -mr-sm">
+                      <button
+                        aria-expanded="false"
+                        aria-haspopup="menu"
+                        data-state="closed"
+                        aria-label="Model"
+                        type="button"
+                        class="reset interactable select-none [-webkit-user-drag:none] outline-none font-semimedium transition-[background-color,border-color,transform,color,opacity] duration-300 ease-out font-sans text-center items-center justify-center leading-loose whitespace-nowrap disabled:cursor-default disabled:opacity-50 data-[state=open]:text-foreground data-[state=open]:bg-quiet h-8 text-sm cursor-pointer origin-center active:scale-[0.97] active:duration-150 active:ease-outExpo inline-flex rounded-full text-quiet hover:text-foreground hover:bg-quiet px-3 relative"
+                      >
+                        <span
+                          class="text-box-trim-both pr-1"
+                          style="opacity: 1; transition: opacity 150ms 150ms"
+                          >Model</span
+                        >
+                        <div
+                          class="flex shrink-0 items-center -mr-0.5"
+                          style="opacity: 1; transition: opacity 150ms 150ms"
+                        >
+                          <svg
+                            role="img"
+                            class="inline-flex fill-current shrink-0"
+                            width="16"
+                            height="16"
+                            stroke-width="1.75"
+                          >
+                            <use xlink:href="#pplx-icon-chevron-down"></use>
+                          </svg>
+                        </div>
+                        <div
+                          class="absolute inset-0 flex items-center justify-center"
+                          style="opacity: 0; transition: opacity 150ms"
+                        ></div>
+                      </button>
+                    </div>
+                    <div class="relative">
+                      <button
+                        aria-label="Dictation"
+                        data-state="closed"
+                        type="button"
+                        class="reset interactable select-none [-webkit-user-drag:none] outline-none font-semimedium transition-[background-color,border-color,transform,color,opacity] duration-300 ease-out font-sans text-center items-center justify-center leading-loose whitespace-nowrap disabled:cursor-default disabled:opacity-50 data-[state=open]:text-foreground data-[state=open]:bg-quiet h-8 text-sm cursor-pointer origin-center active:scale-[0.97] active:duration-150 active:ease-outExpo inline-flex rounded-full aspect-square p-0 aspect-[9/8] text-quiet hover:text-foreground hover:bg-quiet"
+                      >
+                        <div class="relative flex items-center justify-center">
+                          <div
+                            class="inline-flex"
+                            style="opacity: 1; transition: opacity 150ms 150ms"
+                          >
+                            <svg
+                              role="img"
+                              class="inline-flex fill-current shrink-0"
+                              width="16"
+                              height="16"
+                              stroke-width="1.75"
+                            >
+                              <use xlink:href="#pplx-icon-microphone"></use>
+                            </svg>
+                          </div>
+                          <div
+                            class="absolute inset-0 flex items-center justify-center"
+                            style="opacity: 0; transition: opacity 150ms"
+                          ></div>
+                        </div>
+                      </button>
+                    </div>
+                    <button
+                      aria-label="Use voice mode"
+                      data-state="closed"
+                      type="button"
+                      class="reset interactable select-none [-webkit-user-drag:none] outline-none font-semimedium transition-[background-color,border-color,transform,color,opacity] duration-300 ease-out font-sans text-center items-center justify-center leading-loose whitespace-nowrap disabled:cursor-default disabled:opacity-50 data-[state=open]:opacity-80 text-inverse border border-transparent h-8 text-sm cursor-pointer origin-center active:scale-[0.97] active:duration-150 active:ease-outExpo inline-flex rounded-full aspect-square p-0 aspect-[9/8] bg-button-bg hover:opacity-80"
+                    >
+                      <div class="relative flex items-center justify-center">
+                        <div
+                          class="inline-flex"
+                          style="opacity: 1; transition: opacity 150ms 150ms"
+                        >
+                          <svg
+                            role="img"
+                            class="inline-flex fill-current shrink-0"
+                            width="16"
+                            height="16"
+                            stroke-width="1.75"
+                          >
+                            <use
+                              xlink:href="#pplx-icon-custom-perplexity-v2v"
+                            ></use>
+                          </svg>
+                        </div>
+                        <div
+                          class="absolute inset-0 flex items-center justify-center"
+                          style="opacity: 0; transition: opacity 150ms"
+                        ></div>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div
+                aria-hidden="true"
+                class="pointer-events-none absolute inset-px z-0 dglow-shadow-idle rounded-[15px]"
+              ></div>
+              <div><div data-type="portal"></div></div></div
+          ></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
