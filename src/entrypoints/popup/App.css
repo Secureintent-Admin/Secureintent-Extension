@@ -6,6 +6,8 @@
   --si-border: rgba(255, 255, 255, 0.08);
   --si-text: #f4f6f8;
   --si-muted: #8b949e;
+  --si-faint: #5a626b;
+  --si-danger: #ff6b6b;
   /* Primary (logos & headers): Fira Code. Secondary (body): Inter. */
   --si-mono: "Fira Code", ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
   --si-sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -158,4 +160,166 @@
 .si-link svg {
   width: 13px;
   height: 13px;
+}
+
+/* --- Session Lock settings (flat, flush with other sections) --- */
+.si-lockcfg {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--si-border);
+}
+.si-lockcfg-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.si-lockcfg-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--si-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--si-text);
+}
+.si-lockcfg-title svg {
+  color: var(--si-cyan);
+}
+/* iOS-style toggle switch */
+.si-toggle {
+  position: relative;
+  flex-shrink: 0;
+  width: 38px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--si-border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease;
+}
+.si-toggle.is-on {
+  background: var(--si-cyan);
+  border-color: var(--si-cyan);
+}
+.si-toggle:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.si-toggle-dot {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 160ms ease;
+}
+.si-toggle.is-on .si-toggle-dot {
+  transform: translateX(16px);
+  background: var(--si-navy);
+}
+.si-lockcfg-hint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #6b7480;
+}
+.si-lockcfg-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--si-muted);
+}
+.si-lockcfg-pin {
+  flex: 1;
+  min-width: 0; /* allow shrink so Save never clips */
+  box-sizing: border-box;
+  padding: 8px 10px;
+  font-family: var(--si-mono);
+  font-size: 12px;
+  color: var(--si-text);
+  background: var(--si-base);
+  border: 1px solid var(--si-border);
+  border-radius: 8px;
+}
+.si-lockcfg-pin::placeholder {
+  color: var(--si-faint, #5a626b);
+}
+.si-lockcfg-pin:focus,
+.si-lockcfg-select:focus {
+  outline: none;
+  border-color: var(--si-cyan);
+}
+.si-lockcfg-save {
+  flex: 0 0 auto;
+  padding: 8px 14px;
+  font-family: var(--si-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--si-navy);
+  background: var(--si-cyan);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: opacity 150ms ease;
+}
+.si-lockcfg-save:disabled {
+  color: var(--si-muted);
+  background: rgba(255, 255, 255, 0.06);
+  cursor: not-allowed;
+}
+.si-lockcfg-btn {
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  font-family: var(--si-mono);
+  font-size: 12px;
+  color: var(--si-text);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--si-border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    color 150ms ease;
+}
+.si-lockcfg-btn:hover {
+  border-color: rgba(114, 255, 255, 0.4);
+}
+.si-lockcfg-btn.is-danger {
+  color: var(--si-danger);
+}
+.si-lockcfg-btn.is-danger:hover {
+  border-color: var(--si-danger);
+}
+.si-lockcfg-rowlabel {
+  flex: 1;
+}
+.si-lockcfg-select {
+  flex: 0 0 auto;
+  padding: 8px 10px;
+  font-family: var(--si-mono);
+  font-size: 12px;
+  color: var(--si-text);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--si-border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.si-lockcfg-note {
+  margin: 0;
+  font-size: 11px;
+  color: var(--si-faint, #5a626b);
+}
+.si-lockcfg-note.is-set {
+  color: var(--si-cyan);
+}
+.si-lockcfg-note.is-error {
+  color: var(--si-danger);
 }

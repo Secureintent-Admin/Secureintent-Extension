@@ -114,6 +114,161 @@
   margin: 0 18px;
 }
 
+.si-lock-scrim {
+  /* Opaque + heavier blur than the warning overlay — this hides the console. */
+  background: rgba(4, 5, 7, 0.94);
+  backdrop-filter: blur(16px);
+}
+.si-lock-card {
+  max-width: 340px;
+  align-items: center;
+  text-align: center;
+  padding: 28px 26px 22px;
+  gap: 0;
+}
+.si-lock-badge {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  color: var(--si-mint);
+  background: radial-gradient(
+    circle at 50% 40%,
+    rgba(114, 255, 255, 0.18),
+    rgba(114, 255, 255, 0.04)
+  );
+  border: 1px solid rgba(114, 255, 255, 0.25);
+  box-shadow: 0 0 24px -6px rgba(114, 255, 255, 0.4);
+}
+.si-lock-glyph {
+  width: 26px;
+  height: 26px;
+}
+.si-lock-title {
+  margin: 16px 0 0;
+  font-family: var(--si-mono);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--si-text);
+}
+.si-lock-sub {
+  margin: 5px 0 0;
+  font-size: 13px;
+  color: var(--si-muted);
+}
+.si-pin {
+  display: flex;
+  gap: 10px;
+  margin: 20px 0 0;
+}
+.si-pin-box {
+  width: 52px;
+  height: 60px;
+  text-align: center;
+  font-family: var(--si-mono);
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--si-text);
+  background: var(--si-base);
+  border: 1.5px solid var(--si-border);
+  border-radius: 12px;
+  caret-color: var(--si-mint);
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+.si-pin-box:focus {
+  outline: none;
+  border-color: var(--si-mint);
+  box-shadow: 0 0 0 3px rgba(114, 255, 255, 0.18);
+}
+.si-pin.is-error .si-pin-box {
+  border-color: var(--si-danger);
+}
+.si-pin.is-error {
+  animation: si-shake 320ms cubic-bezier(0.36, 0.07, 0.19, 0.97);
+}
+@keyframes si-shake {
+  10%,
+  90% {
+    transform: translateX(-2px);
+  }
+  30%,
+  70% {
+    transform: translateX(4px);
+  }
+  50% {
+    transform: translateX(-5px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .si-pin.is-error {
+    animation: none;
+  }
+}
+.si-lock-error {
+  min-height: 16px;
+  margin: 12px 0 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--si-danger);
+}
+.si-lock-foot {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 18px;
+  font-family: var(--si-mono);
+  font-size: 11px;
+  color: var(--si-faint);
+}
+.si-lock-foot svg {
+  color: #fff;
+}
+
+/* Pre-lock countdown toast */
+.si-lockwarn {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: rgba(11, 13, 17, 0.96);
+  border: 1px solid rgba(114, 255, 255, 0.25);
+  color: var(--si-text);
+  font-family: var(--si-mono);
+  font-size: 12.5px;
+  box-shadow: 0 10px 30px -8px rgba(0, 0, 0, 0.7);
+}
+.si-lockwarn-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--si-mint);
+  box-shadow: 0 0 8px var(--si-mint);
+  animation: si-pulse 1s ease-in-out infinite;
+}
+@keyframes si-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .si-lockwarn-dot {
+    animation: none;
+  }
+}
+
 .si-ghost-lead {
   margin: 0;
   padding: 16px 18px 4px;

@@ -4,6 +4,7 @@ import { Logo } from '@/components/Logo';
 import { getActiveBundle } from '@/lib/config';
 import { blockedCountItem } from '@/settings';
 import './App.css';
+import { SessionLockSettings } from './SessionLockSettings';
 
 function ArrowIcon() {
   return (
@@ -90,6 +91,8 @@ function App() {
           {syncing ? 'Checking…' : 'Check for updates'}
         </button>
       </div>
+
+      <SessionLockSettings />
 
       <footer className="si-pop-footer">
         <span>Evaluated locally</span>

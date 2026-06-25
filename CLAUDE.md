@@ -10,7 +10,7 @@ the full Statement of Work, scope, and timeline.
 
 The end-to-end design:
 
-- Content script captures **paste events** and renders warnings in a **closed Shadow DOM overlay**
+- Content scripts capture **paste events** and render warnings in a **closed Shadow DOM overlay**
   (closed so host pages can't inspect or tamper with it).
 - A **client-side pre-filter** does cheap detection on-device using a signed pattern bundle fetched
   from the Worker. The `killSwitch` field in the bundle can disable the guard remotely.
@@ -21,14 +21,15 @@ The end-to-end design:
 - Cross-browser from one codebase: Chrome, Edge, Firefox, Opera.
 
 The sibling `../backend` directory holds the Cloudflare Worker (Hono) that serves the signed config
-bundle and ingests telemetry to ClickHouse. The bundle is served from code (no DB); the signing
-private key is a Worker secret.
+bundle (from `/v1/config`) and ingests telemetry (`/v1/telemetry`) to ClickHouse. The bundle is
+served from code (no DB); the signing private key is a Worker secret.
 
 ## Stack
 
 [WXT](https://wxt.dev) (extension framework, wraps Vite) + React 19 + TypeScript. WXT handles the
 manifest, MV3 entrypoint wiring, cross-browser builds, and HMR — there is no hand-written
-`manifest.json`.
+`manifest.json`. **Biome** is the linter/formatter (not ESLint/Prettier). **Semgrep** runs custom
+rules in `semgrep/`. **Playwright** drives the live end-to-end suite in `e2e/`.
 
 ## Commands
 
@@ -40,7 +41,11 @@ pnpm dev:firefox    # dev server, Firefox target
 pnpm build          # production build → .output/chrome-mv3/
 pnpm zip            # packaged zip for store submission (Chrome)
 pnpm compile        # tsc --noEmit — type-check
-pnpm test           # vitest run (unit tests in lib/)
+pnpm lint           # biome lint
+pnpm check          # biome check (lint + format); check:fix to auto-fix
+pnpm format         # biome format --write
+pnpm semgrep        # run custom Semgrep rules (semgrep/), fail on findings
+pnpm test           # vitest run (unit tests, colocated *.test.ts)
 pnpm test:watch     # vitest watch
 pnpm coverage       # vitest run --coverage
 ```
@@ -48,132 +53,153 @@ pnpm coverage       # vitest run --coverage
 Run a single test file: `pnpm test <name>` (e.g. `pnpm test detection`) — vitest filters by path
 substring.
 
-Tests use Vitest with the `WxtVitest` plugin (`vitest.config.ts`), jsdom environment, and
+Unit tests use Vitest with the `WxtVitest` plugin (`vitest.config.ts`), jsdom, and
 `wxt/testing/fake-browser` for `browser.*`/storage. Test files live next to the code as
-`src/lib/**/*.test.ts(x)`. SOW target is ≥85% coverage on `src/lib/` (pure logic); the thin
-`createShadowRootUi` wrapper `src/lib/overlay/mount.ts` is excluded and verified via build + manual
-load.
+`*.test.ts(x)`. SOW target is ≥85% coverage on pure logic (`src/lib/`, `src/content/`,
+`src/services/`); thin `createShadowRootUi` mount wrappers in `src/overlay/mount*.ts` are excluded and
+verified via build + manual load.
+
+**E2E** (Playwright, builds the extension then loads it in a real Chromium):
+
+```bash
+pnpm e2e               # canary + fallback specs (no live network)
+pnpm e2e:live          # live LLM sites (needs e2e:login session first)
+pnpm e2e:roundtrip     # anonymize → rehydrate vault roundtrip
+pnpm e2e:ghost         # large-log sanitization
+pnpm e2e:session-lock  # cloud-console PIN lock
+pnpm e2e:login         # one-time: capture a logged-in browser session
+```
 
 ## Code layout
 
-All source lives under `src/` (WXT `srcDir: 'src'`). Per-site content scripts are **thin**; all real
-logic lives in pure, testable `src/lib/` modules.
+All source lives under `src/` (WXT `srcDir: 'src'`). Per-site content scripts are **thin** — each just
+passes `{ name, siteKey }` to `createPasteGuard`. All real logic lives in pure, testable modules under
+`src/content/`, `src/lib/`, and `src/services/`.
 
 **Adding a new site** requires a new `src/entrypoints/<site>.content/index.ts` that passes
-`{ name, siteKey, inputSelector }` to `createPasteGuard` — and a manifest change (store resubmit).
-Changing an existing site's selector or patterns is done via a remote bundle update (no resubmit).
-The popup's `SUPPORTED` host list must also be kept in sync.
+`{ name, siteKey }` to `createPasteGuard`, a `matches` host list, and a selector entry in
+`src/content/siteSelectors.ts` (plus a manifest change → store resubmit). Changing an existing site's
+selector or patterns is done via a remote bundle update (no resubmit). Even with no dedicated
+entrypoint a site is still covered by the **fallback** catch-all guard; dedicated entrypoints exist for
+beating the page's own handlers and site-specific selectors. Keep the popup's supported-host list in
+sync.
 
 ```
 src/
   entrypoints/
-    chatgpt.content/index.ts    # chatgpt.com + chat.openai.com
-    claude.content/index.ts     # claude.ai
-    gemini.content/index.ts     # gemini.google.com  (div.ql-editor, not .ql-clipboard)
-    perplexity.content/index.ts # perplexity.ai
-    copilot.content/index.ts    # copilot.microsoft.com
-    grok.content/index.ts       # grok.com
-    mistral.content/index.ts    # chat.mistral.ai
-    meta.content/index.ts       # meta.ai + www.meta.ai
-    poe.content/index.ts        # poe.com
-    v0.content/index.ts         # v0.app + v0.dev
-    bolt.content/index.ts       # bolt.new
-    lovable.content/index.ts    # lovable.dev
-    replit.content/index.ts     # replit.com
-    reddit.content/index.ts     # reddit.com  (comma-separated selector: title + body)
-    background.ts               # MV3 service worker: config-sync alarm + refresh message handler
-    popup/                      # React popup: enable/pause toggle, intercepted-count, pattern refresh
-  components/Logo.tsx           # brand mark (inlined SVG, renders inside closed shadow DOM)
+    <site>.content/index.ts     # one thin guard per site: chatgpt, claude, gemini, perplexity,
+                                #   copilot, githubcopilot, grok, mistral, meta, poe, v0, bolt,
+                                #   lovable, replit, reddit, deepseek, duck, kimi, qwen
+    fallback.content/index.ts   # catch-all guard on *://*/* — no-ops where a dedicated guard ran
+                                #   (shared window flag) so sites are never double-guarded
+    sessionlock.content/index.ts# cloud-console PIN lock (AWS/GCP/Azure/CF/DO/Heroku/… consoles)
+    background.ts               # MV3 service worker: config sync alarm, badge bumps, vault opt-in
+    popup/                      # React popup: enable/pause, intercepted count, PIN setup, refresh
+  content/                      # paste-guard + session-lock logic (was src/lib/content/)
+    createPasteGuard.ts         # paste capture → detect → fingerprint → overlay → insert/anon/cancel
+    createSessionLock.ts        # inactivity/tab-away → PIN gate over high-risk consoles
+    siteSelectors.ts            # per-siteKey input selectors (static fallback for the bundle)
+    findComposer.ts             # walk the event path to the composer element
+    fallbackSelector.ts         # generic text-entry selector for the catch-all guard
+    types.ts                    # SiteConfig { name, siteKey }
   lib/
-    content/
-      createPasteGuard.ts       # paste capture → detect → fingerprint → overlay → insert/redact/cancel
-      types.ts                  # SiteConfig { name, siteKey, inputSelector }
-    config/
-      types.ts                  # ConfigBundle / BundlePattern / BundleSite shapes
-      default.ts                # bundled offline fallback (mirrors Worker DEFAULT_BUNDLE)
-      store.ts                  # storage items: configItem + lastSyncedItem; getActiveBundle()
-      sync.ts                   # fetchConfigbundle → validate → verify → persist if newer
-      verify.ts                 # Ed25519 signature check (embedded public key, one-shot import)
-      validate.ts               # structural runtime type-guard for untrusted bundle data
-      scheduler.ts              # SYNC_ALARM constant + handleRefreshMessage for popup-triggered sync
-      endpoint.ts               # re-exports API_BASE from telemetry/endpoint
-      index.ts                  # public API re-exports for the config subsystem
     detection/
-      types.ts                  # SecretType + Detection
       patterns.ts               # static offline regex catalog (TYPE_RANK, PATTERNS)
-      compile.ts                # compilePatterns: RawPattern[] → Pattern[] (invalid regex dropped)
-      index.ts                  # detectSecrets: scan + overlap-resolve by TYPE_RANK then length
-      redact.ts                 # redact() + maskFor() — fixed-width masking, right-to-left splice
-      locate.ts                 # locateInText: line# + masked windowed snippet (no raw secret)
-    fingerprint/
-      salt.ts                   # getOrCreateSalt: per-install random 16-byte hex salt in storage
-      index.ts                  # fingerprint(secret, salt): SHA-256 hex, raw secret never leaves device
-    overlay/
-      Overlay.tsx               # React warning dialog: detection list, masked snippets, 3-action buttons
-      mount.ts                  # mountOverlay: closed shadow DOM via createShadowRootUi
-    debug/
-      index.ts                  # siDebug / siError / elapsedMs — consistent structured console output
-    settings/
-      index.ts                  # enabledItem (on/off toggle) + blockedCountItem (lifetime count)
-    telemetry/
-      types.ts                  # TelemetryEvent / TelemetryAction / TelemetryDetection
-      build.ts                  # buildEvent: assemble event with fresh UUID
-      send.ts                   # sendTelemetry: fire-and-forget POST, keepalive, never throws
-      endpoint.ts               # API_BASE — single source for the Worker URL
-      index.ts                  # public API re-exports
-  public/                       # static assets copied as-is (publicDir: 'src/public')
-  assets/                       # bundled assets (imported via @/assets/...)
+      validators.ts             # post-match validators (Luhn card check, entropy) cut false positives
+      compile.ts / index.ts     # compilePatterns + detectSecrets (overlap-resolve by rank then length)
+      redact.ts                 # fixed-width masking
+      tokenize.ts               # tokenizeSecrets: secret → ⟦SI:xxxxxxxx⟧ token + VaultEntry list
+      ghost.ts / sanitize.ts    # large-log "ghost" scrub: extra patterns for IPs/emails + summarize
+      locate.ts                 # line# + masked windowed snippet (no raw secret)
+    vault/index.ts              # RAM-only token→secret store in storage.session (rehydrate anon pastes)
+    lock/index.ts               # PIN hashing/verify (reuses fingerprint salt + SHA-256)
+    fingerprint/                # per-install salt + fingerprint(secret, salt): SHA-256, never leaves device
+    config/                     # ConfigBundle shapes, store, validate, verify (Ed25519), default fallback
+    api/client.ts               # getJson (no-store) + postJson (keepalive) + API_BASE
+    telemetry/                  # TelemetryEvent types (build/send now live in services/)
+    features/                   # open-core feature registry (registerFeature / notify*)
+    badge.ts                    # per-tab intercepted-count toolbar badge
+    settings/index.ts           # enabled toggle, blocked count, session-lock config
+    debug/index.ts              # siDebug / siError / elapsedMs structured console output
+  services/                     # I/O orchestration over pure lib modules
+    configService.ts            # syncConfig: fetch /v1/config → validate → verify → persist if newer
+    scheduler.ts                # SYNC_ALARM + handleRefreshMessage (popup-triggered sync)
+    telemetryService.ts         # buildEvent (fresh UUID) + sendTelemetry (fire-and-forget POST)
+  overlay/                      # React dialogs + closed-shadow-DOM mounts
+    Overlay.tsx                 # paste warning: detections, masked snippets, 3 actions
+    SessionLock.tsx / LockWarning.tsx
+    mount.ts / mountSessionLock.ts / mountLockWarning.ts   # createShadowRootUi wrappers (test-excluded)
+  core.ts                       # semver'd public API barrel (@secureintent/core) — pro imports this
+  components/Logo.tsx           # brand mark (inlined SVG, renders inside closed shadow DOM)
+  public/ assets/               # static + bundled assets
 ```
 
 ## Key invariants
 
 - **Raw pasted text never leaves the device** — only the salted SHA-256 fingerprint is computed and
-  sent in telemetry. Never log or transmit paste text.
-- The overlay uses a **closed** shadow root; the guard **fails open** (any error lets the paste
+  sent in telemetry. Never log or transmit paste text. The same boundary applies to the vault (token →
+  secret pairs live only in `storage.session`, never on disk, never to network).
+- The overlay uses a **closed** shadow root; both guards **fail open** (any error lets the paste/page
   through rather than trapping the user).
 - The paste handler must call `preventDefault`/`stopImmediatePropagation` **synchronously**, before
-  any `await`. The `enabled` flag is cached in a local var (refreshed via `enabledItem.watch`) and
-  read synchronously — don't turn that check into an `await isEnabled()` inside the handler.
-- The content script registers at `runAt: 'document_start'` with a **capture-phase** listener so it
-  beats the page's own paste handlers. Programmatic pastes (e.g. our own re-inserts via
-  `execCommand('insertText')`) are skipped via `e.isTrusted`.
-- Detection is regex-only; overlapping matches resolve by `TYPE_RANK` (private-key > known-key >
-  env-credential), then longer match wins.
-- The guard reads the active bundle at content-script boot, then resolves `inputSelector` as
-  `bundle.sites[siteKey]?.inputSelector ?? config.inputSelector` (remote overrides static fallback).
+  any `await`. The `enabled` flag and the vault snapshot are cached in local vars (refreshed via
+  watchers) and read synchronously — don't turn those into `await`s inside the handler.
+- Content scripts register at `runAt: 'document_start'` with a **capture-phase** listener so they beat
+  the page's own paste handlers. Programmatic pastes (our own `execCommand('insertText')` re-inserts)
+  are skipped via `e.isTrusted`.
+- Detection is regex-then-validator; overlapping matches resolve by `TYPE_RANK` (private-key >
+  known-key > env-credential), then longer match wins. Broad regexes (cards) are confirmed by a
+  post-match validator (Luhn / entropy) to avoid false positives.
+- The guard reads the active bundle at content-script boot, then resolves the input selector as
+  `bundle.sites[siteKey]?.inputSelector ?? siteSelectors[siteKey]` (remote overrides static fallback).
 - Remote config is **Ed25519-signed** and verified before use; the embedded public key must match the
   Worker's signing key. Bundles are accepted only if strictly newer (`version >` current).
 
+## Overlay actions (paste-guard)
+
+The warning dialog offers three outcomes, mapped to telemetry actions in `createPasteGuard`:
+
+- **paste** → `paste_clear` — insert the original text (for a large log, `sanitize()` scrubs it first).
+- **redact** → `paste_anonymously` — `tokenizeSecrets` replaces each secret with a `⟦SI:…⟧` token,
+  inserts the masked text, and stores the `token → secret` entries in the **vault** so the destination
+  can be rehydrated later in the same session.
+- **cancel** → `cancelled` — drop the paste entirely.
+
+## Session lock
+
+A separate, opt-in feature (`sessionlock.content` + `createSessionLock` + `lib/lock`). After
+inactivity or tab-away it covers high-risk cloud consoles with a PIN gate. The PIN is hashed with the
+same per-install salt + SHA-256 as the fingerprint module (never stored plaintext). A per-tab
+`sessionStorage` flag survives a reload (a refresh can't bypass the lock) and clears on tab close.
+Fails open on error.
+
 ## Open-core seam
 
-This repo is the **public, source-available (view-only — see [LICENSE](LICENSE))**
-half. Premium lives in a separate private repo (`backend/` + `pro/`) and plugs in
-— it never edits this code. See [docs/open-core.md](docs/open-core.md).
+This repo is the **public, source-available (view-only — see [LICENSE](LICENSE))** half. Premium lives
+in a separate private repo (`backend/` + `pro/`) and plugs in — it never edits this code. See
+[docs/open-core.md](docs/open-core.md).
 
-- `src/lib/features/` — feature registry. Pro calls `registerFeature`; the guard
-  fires `notifyDetections`/`notifyAction`. No-op in this (free) build.
-- Hooks get detection **metadata only** (counts/types/labels). Raw clipboard
-  text is never passed to a feature — same hard privacy boundary as everywhere.
-- `src/core.ts` — the semver'd public API the pro repo imports. Keep it stable;
-  refactor internals freely behind it.
-- Dependency points one way: **pro → core, never reverse.** Core must never
-  import from or reference pro.
-- `BUILD_TARGET=free|pro` in `wxt.config.ts` (free default). Package publishing
-  stays off until the first premium feature ships.
+- `src/lib/features/` — feature registry. Pro calls `registerFeature`; the guard fires
+  `notifyDetections`/`notifyAction`. No-op in this (free) build.
+- Hooks get detection **metadata only** (counts/types/labels). Raw clipboard text is never passed to a
+  feature — same hard privacy boundary as everywhere.
+- `src/core.ts` — the semver'd public API the pro repo imports. Keep it stable; refactor internals
+  freely behind it.
+- Dependency points one way: **pro → core, never reverse.** Core must never import from or reference
+  pro. `BUILD_TARGET=free|pro` in `wxt.config.ts` (free default).
 
 ## WXT conventions
 
 - **Entrypoints are discovered by filename** in `src/entrypoints/`: `{name}.{ext}` or
   `{name}/index.{ext}` only — deeply nested files (e.g. `content/chatgpt.ts`) are NOT entrypoints. A
   file is a *content script* when its name is `content` or ends in `.content` (so the folder is
-  `<site>.content/`).
-- `@/` resolves to `src/` (the srcDir), e.g. `@/lib/...`, `@/assets/...`.
+  `<site>.content/`). Note `src/content/` is a plain logic dir, **not** an entrypoint folder.
+- `@/` resolves to `src/` (the srcDir), e.g. `@/lib/...`, `@/content/...`, `@/assets/...`.
 - Import WXT APIs from the **`#imports`** virtual module
   (`import { defineContentScript, createShadowRootUi, ContentScriptContext, storage } from '#imports'`).
   These also work as auto-imported globals, but `#imports` is explicit and used throughout this repo.
 - `defineBackground` and `browser` are likewise available via `#imports` / auto-import.
-- Path aliases: `@/` → project root (e.g. `@/assets/...`). Files under `public/` are served from the
-  web-accessible root, referenced with a leading slash (e.g. `/wxt.svg`).
+- Files under `public/` are served from the web-accessible root, referenced with a leading slash.
 - WXT config is `wxt.config.ts`; the React integration is enabled via the `@wxt-dev/module-react`
   module there. `tsconfig.json` extends the generated `.wxt/tsconfig.json` — don't edit the generated
   one.
