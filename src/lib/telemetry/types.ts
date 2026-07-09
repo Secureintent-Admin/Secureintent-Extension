@@ -15,4 +15,10 @@ export interface TelemetryEvent {
   policyVersion: number;
   detections: TelemetryDetection[];
   action: TelemetryAction;
+  // User context — for segmenting telemetry by tier / business. No PII: only the
+  // plan, how it was granted, whether signed in, and (business tier) the domain.
+  plan: string;
+  source: string;
+  signedIn: boolean;
+  businessDomain: string | null;
 }

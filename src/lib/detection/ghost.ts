@@ -12,10 +12,12 @@ import type { Pattern } from './patterns';
 export const GHOST_EXTRA_PATTERNS: Pattern[] = [
   {
     type: 'pii',
-    label: 'Internal IP',
-    // RFC 1918 private ranges only: 10/8, 172.16–31/12, 192.168/16.
+    label: 'IP address',
+    // Any valid IPv4 (each octet 0–255), public or private. Boundaries use
+    // digit/dot lookarounds rather than \b, so IPs glued to following text in
+    // flattened logs (e.g. "10.0.0.1Installed", "10.20.2.231VDOM") are caught.
     regex:
-      /\b(?:10(?:\.\d{1,3}){3}|172\.(?:1[6-9]|2\d|3[01])(?:\.\d{1,3}){2}|192\.168(?:\.\d{1,3}){2})\b/g,
+      /(?<![\d.])(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?![\d.])/g,
   },
   {
     type: 'pii',

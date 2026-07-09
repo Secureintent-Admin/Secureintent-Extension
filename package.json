@@ -2,10 +2,10 @@
   "name": "secureintent-extension",
   "description": "Warns you before pasting API keys, tokens, or secrets into AI tools and other sites. On-device — your text never leaves the browser.",
   "private": true,
-  "version": "1.0.4",
+  "version": "1.0.6",
   "type": "module",
   "license": "UNLICENSED",
-  "//core": "Open-core seam. The pro repo consumes this barrel. Until the first premium feature ships, publishing stays off (private:true). To publish: bump version, set private:false, rename to @secureintent/core, add a build step that resolves @/ aliases (unbuild/tsup), then `pnpm publish`.",
+  "//core": "src/core.ts is an internal API barrel that groups the reusable guard/overlay/detection exports. No open-core split — this is a single extension with free and paid tiers (paid features gated at runtime by a signed entitlement). Not published as a package; stays private.",
   "exports": {
     ".": "./src/core.ts"
   },
@@ -36,6 +36,7 @@
     "postinstall": "wxt prepare"
   },
   "dependencies": {
+    "@clerk/chrome-extension": "^3.1.42",
     "react": "^19.2.4",
     "react-dom": "^19.2.4"
   },

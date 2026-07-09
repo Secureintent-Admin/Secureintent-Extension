@@ -1,15 +1,15 @@
 import type { Detection } from '@/lib/detection';
 
 /**
- * Open-core seam.
+ * Feature-hook registry.
  *
- * Premium ("pro") code lives in a private repo and plugs into the free
- * extension through this registry — it never edits free internals, so free
- * updates flow into pro without merge conflicts.
+ * Optional features plug into the paste guard through this registry instead of
+ * editing the guard directly. (Single build, free + paid tiers — there is no
+ * separate repo; paid features are gated at runtime by a signed entitlement.)
  *
  * Privacy invariant: hooks receive detection *metadata* only (counts, types,
  * labels). Raw clipboard text and the matched secret substrings are
- * deliberately withheld — they never leave the device, not even to pro code.
+ * deliberately withheld — they never leave the device, not even to a feature.
  */
 export interface DetectionContext {
   site: string;

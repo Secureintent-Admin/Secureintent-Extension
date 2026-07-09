@@ -7,7 +7,7 @@ export interface GhostSummary {
 
 /** Short placeholder category for a finding, derived from its label. */
 function categoryFor(label: string): string {
-  if (label === 'Internal IP') return 'ip';
+  if (label === 'IP address' || label === 'Internal IP') return 'ip';
   if (label === 'Email address') return 'email';
   return 'secret';
 }
@@ -15,7 +15,7 @@ function categoryFor(label: string): string {
 /**
  * Strip findings from a (typically large) log/terminal paste, replacing each
  * with a typed, correlation-preserving placeholder: distinct values are numbered
- * per category (`‹ip_1›`, `‹email_2›`), and a repeated value always maps to the
+ * per category (`[#IP_1#]`, `[#EMAIL_2#]`), and a repeated value always maps to the
  * same placeholder so the model still sees structure. Irreversible — Ghost
  * pastes are not rehydrated. Pure: no DOM, no async.
  */
@@ -29,7 +29,7 @@ export function sanitize(text: string, detections: Detection[]): string {
     if (tokenByValue.has(d.match)) continue;
     const cat = categoryFor(d.label);
     counters[cat] = (counters[cat] ?? 0) + 1;
-    tokenByValue.set(d.match, `‹${cat}_${counters[cat]}›`);
+    tokenByValue.set(d.match, `[#${cat.toUpperCase()}_${counters[cat]}#]`);
   }
 
   // Second pass (right-to-left): splice so earlier offsets stay valid.

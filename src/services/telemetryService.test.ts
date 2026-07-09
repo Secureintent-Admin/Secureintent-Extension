@@ -14,6 +14,10 @@ describe('buildEvent', () => {
         { fingerprint: 'a'.repeat(64) as Fingerprint, type: 'known-key', label: 'OpenAI API key' },
       ],
       action: 'paste_anonymously',
+      plan: 'developer',
+      source: 'none',
+      signedIn: false,
+      businessDomain: null,
     });
     expect(ev.site).toBe('Claude');
     expect(ev.action).toBe('paste_anonymously');
@@ -33,6 +37,10 @@ describe('buildEvent', () => {
         },
       ],
       action: 'cancelled',
+      plan: 'business_pro',
+      source: 'business_email',
+      signedIn: true,
+      businessDomain: 'acme.com',
     });
     expect(JSON.stringify(ev)).not.toMatch(/BEGIN|sk-|AKIA/);
   });
@@ -50,6 +58,10 @@ const ev = {
     },
   ],
   action: 'paste_anonymously' as const,
+  plan: 'developer',
+  source: 'none',
+  signedIn: false,
+  businessDomain: null,
 };
 
 describe('sendTelemetry', () => {

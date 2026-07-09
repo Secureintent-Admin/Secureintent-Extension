@@ -10,6 +10,10 @@ lerna-debug.log*
 node_modules
 dist
 coverage
+
+# Local build-time env (Clerk publishable key, etc.)
+.env
+.env.local
 stats.html
 stats-*.json
 .wxt

@@ -6,19 +6,28 @@ const labels = (text: string) => detectSecrets(text, GHOST_EXTRA_PATTERNS).map((
 
 describe('GHOST_EXTRA_PATTERNS', () => {
   test('flags private 10.x addresses', () => {
-    expect(labels('connecting to 10.0.4.21 now')).toEqual(['Internal IP']);
+    expect(labels('connecting to 10.0.4.21 now')).toEqual(['IP address']);
   });
 
-  test('flags 172.16–31.x and 192.168.x ranges', () => {
-    expect(labels('db 172.16.0.9 cache 172.31.255.4 web 192.168.1.10')).toEqual([
-      'Internal IP',
-      'Internal IP',
-      'Internal IP',
+  test('flags private and public IPv4 alike', () => {
+    expect(labels('db 192.168.1.10 dns 8.8.8.8 syslog 64.47.61.150 cgnat 100.64.11.193')).toEqual([
+      'IP address',
+      'IP address',
+      'IP address',
+      'IP address',
     ]);
   });
 
-  test('does NOT flag public IPs', () => {
-    expect(labels('resolver 8.8.8.8 and 172.15.0.1 and 172.32.0.1')).toEqual([]);
+  test('catches IPs glued to following text (flattened logs)', () => {
+    // No whitespace after the IP — a trailing \b would have missed these.
+    expect(labels('NOM IP 10.79.72.47Installed: YES, peer 10.20.2.231VDOM Count')).toEqual([
+      'IP address',
+      'IP address',
+    ]);
+  });
+
+  test('does not match over-range octets', () => {
+    expect(labels('build 10.20.300.1 here')).toEqual([]);
   });
 
   test('flags email addresses', () => {

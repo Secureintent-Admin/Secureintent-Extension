@@ -489,6 +489,21 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.55),
     0 8px 22px -10px rgba(114, 255, 255, 0.6);
 }
+/* Locked pro action: muted, with a lock glyph. Click routes to upgrade. */
+.si-btn-locked {
+  background: transparent;
+  color: var(--si-cyan);
+  border: 1px dashed var(--si-cyan);
+  opacity: 0.85;
+}
+.si-btn-locked::before {
+  content: "🔒 ";
+  font-size: 0.85em;
+}
+.si-btn-locked:hover {
+  opacity: 1;
+  background: rgba(114, 255, 255, 0.08);
+}
 .si-btn:focus-visible {
   outline: 2px solid var(--si-mint);
   outline-offset: 2px;

@@ -10,6 +10,29 @@ import { createPasteGuard } from './createPasteGuard';
 const { mountOverlayMock } = vi.hoisted(() => ({ mountOverlayMock: vi.fn() }));
 vi.mock('../overlay/mount', () => ({ mountOverlay: mountOverlayMock }));
 
+// Mock the entitlement gate. Default: pro unlocked (existing behavior tests).
+// proRef.value → ghost gating (hasFeatureCached). anonRef.value → anonymise
+// allowance (canAnonymize): true = Pro or free quota left, false = quota exhausted.
+const { proRef, anonRef } = vi.hoisted(() => ({
+  proRef: { value: true },
+  anonRef: { value: true },
+}));
+vi.mock('@/lib/entitlement', () => ({
+  initEntitlementCache: vi.fn(async () => () => {}),
+  hasFeatureCached: vi.fn(() => proRef.value),
+  getEntitlementSnapshot: vi.fn(() => ({
+    plan: 'developer',
+    source: 'none',
+    pro: false,
+    signedIn: false,
+    businessDomain: null,
+  })),
+}));
+vi.mock('@/lib/quota', () => ({
+  canAnonymize: vi.fn(async () => anonRef.value),
+  consumeAnonymize: vi.fn(async () => anonRef.value),
+}));
+
 const SECRET = 'sk-' + 'a'.repeat(30);
 
 // Real paste events expose composedPath() (target + ancestors); the guard reads it
@@ -53,22 +76,6 @@ function setup() {
     input,
     start: () => createPasteGuard(ctx as never, { name: 'ChatGPT', siteKey: 'chatgpt' }),
     firePaste: (e: ReturnType<typeof makeEvent>) => handlers.paste?.(e),
-    // Simulate copying `selectionText` off the page: stub the selection, fire the
-    // capture-phase copy listener, and capture any clipboard rewrite.
-    fireCopy: async (selectionText: string) => {
-      const original = window.getSelection;
-      (window as unknown as { getSelection: () => unknown }).getSelection = () => ({
-        toString: () => selectionText,
-      });
-      const setData = vi.fn();
-      const e = { clipboardData: { setData }, preventDefault: vi.fn() };
-      try {
-        await handlers.copy?.(e);
-      } finally {
-        window.getSelection = original;
-      }
-      return { e, setData };
-    },
     makeEvent,
   };
 }
@@ -84,6 +91,8 @@ const sendTelemetrySpy = vi.spyOn(telemetryService, 'sendTelemetry').mockImpleme
 describe('createPasteGuard', () => {
   beforeEach(() => {
     fakeBrowser.reset();
+    proRef.value = true; // default: pro unlocked
+    anonRef.value = true; // default: anonymise allowed (quota available)
     mountOverlayMock.mockReset();
     mountOverlayMock.mockResolvedValue({ remove: vi.fn() });
     document.execCommand = vi.fn(() => true);
@@ -166,6 +175,45 @@ describe('createPasteGuard', () => {
     expect(document.execCommand).toHaveBeenCalledWith('insertText', false, `x ${SECRET} y`);
   });
 
+  test('Slate editors (e.g. Discord) receive a synthetic paste, not execCommand', async () => {
+    // jsdom can't construct DataTransfer/ClipboardEvent — provide Event-based fakes.
+    class FakeDT {
+      private d = '';
+      setData(_t: string, v: string) {
+        this.d = v;
+      }
+      getData() {
+        return this.d;
+      }
+    }
+    class FakeClipboardEvent extends Event {
+      clipboardData: FakeDT | undefined;
+      constructor(type: string, init?: { clipboardData?: FakeDT } & EventInit) {
+        super(type, init);
+        this.clipboardData = init?.clipboardData;
+      }
+    }
+    vi.stubGlobal('DataTransfer', FakeDT);
+    vi.stubGlobal('ClipboardEvent', FakeClipboardEvent);
+
+    const t = setup();
+    t.input.setAttribute('data-slate-editor', 'true');
+    let pasted: string | null = null;
+    t.input.addEventListener('paste', (e) => {
+      pasted = (e as unknown as FakeClipboardEvent).clipboardData?.getData() ?? '';
+      e.preventDefault(); // Slate consumes the paste
+    });
+
+    await t.start();
+    await t.firePaste(t.makeEvent(`x ${SECRET} y`));
+    (document.execCommand as ReturnType<typeof vi.fn>).mockClear();
+    lastOnAction()('paste');
+
+    expect(pasted).toContain(SECRET);
+    expect(document.execCommand).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
   test('"redact" action inserts text with the secret removed', async () => {
     const t = setup();
     await t.start();
@@ -175,6 +223,34 @@ describe('createPasteGuard', () => {
     const inserted = (document.execCommand as ReturnType<typeof vi.fn>).mock.calls.at(-1)![2];
     expect(inserted).not.toContain(SECRET);
     expect(inserted).toContain('x ');
+  });
+
+  test('free user with quota exhausted: overlay pro=false and "redact" is gated', async () => {
+    proRef.value = false; // no ghost feature
+    anonRef.value = false; // monthly anonymise quota used up
+    const t = setup();
+    await t.start();
+    await t.firePaste(t.makeEvent(`x ${SECRET} y`));
+
+    // Overlay renders the locked Pro state (upgrade prompt).
+    expect(mountOverlayMock.mock.calls[0][1].pro).toBe(false);
+
+    // Even if the (locked) action fires, the pro path does not run.
+    lastOnAction()('redact');
+    const calls = (document.execCommand as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls.every((c) => !/⟦SI:[0-9a-f]{8}⟧/.test(String(c[2])))).toBe(true);
+  });
+
+  test('free user with quota left: overlay pro=true and "redact" anonymises', async () => {
+    proRef.value = false; // no ghost feature
+    anonRef.value = true; // free monthly quota available
+    const t = setup();
+    await t.start();
+    await t.firePaste(t.makeEvent(`x ${SECRET} y`));
+    expect(mountOverlayMock.mock.calls[0][1].pro).toBe(true);
+    lastOnAction()('redact');
+    const inserted = (document.execCommand as ReturnType<typeof vi.fn>).mock.calls.at(-1)![2];
+    expect(inserted).toMatch(/⟦SI:[0-9a-f]{8}⟧/);
   });
 
   test('"redact" action inserts reversible SI tokens in place of the secret', async () => {
@@ -188,29 +264,61 @@ describe('createPasteGuard', () => {
     expect(inserted).toMatch(/⟦SI:[0-9a-f]{8}⟧/);
   });
 
-  test('rehydrate: copying LLM output containing a token restores the real secret', async () => {
+  // Dehydrate a secret, then paste its token back, returning the token string.
+  async function dehydrateToken(t: ReturnType<typeof setup>): Promise<string> {
+    await t.firePaste(t.makeEvent(`x ${SECRET} y`));
+    lastOnAction()('redact'); // populates memVault synchronously
+    const inserted = (document.execCommand as ReturnType<typeof vi.fn>).mock.calls.at(-1)![2];
+    return inserted.match(/⟦SI:[0-9a-f]{8}⟧/)![0];
+  }
+
+  test('rehydrate: pasting a token prompts, and "Rehydrate" restores the real secret', async () => {
     const t = setup();
     await t.start();
-    await t.firePaste(t.makeEvent(`x ${SECRET} y`));
-    lastOnAction()('redact');
+    const token = await dehydrateToken(t);
 
-    const inserted = (document.execCommand as ReturnType<typeof vi.fn>).mock.calls.at(-1)![2];
-    const token = inserted.match(/⟦SI:[0-9a-f]{8}⟧/)![0];
+    const e = t.makeEvent(`const key = "${token}";`);
+    await t.firePaste(e);
+    expect(e.preventDefault).toHaveBeenCalled();
+    // A rehydrate overlay is shown rather than swapping silently.
+    expect(mountOverlayMock.mock.calls.at(-1)![1].rehydrate).toEqual({ tokenCount: 1 });
 
-    // vaultPut is fire-and-forget; retry the copy until the mapping has landed.
-    await vi.waitFor(async () => {
-      const c = await t.fireCopy(`const key = "${token}";`);
-      expect(c.setData).toHaveBeenCalledWith('text/plain', `const key = "${SECRET}";`);
-      expect(c.e.preventDefault).toHaveBeenCalled();
-    });
+    lastOnAction()('rehydrate');
+    const out = (document.execCommand as ReturnType<typeof vi.fn>).mock.calls.at(-1)![2];
+    expect(out).toBe(`const key = "${SECRET}";`);
   });
 
-  test('rehydrate: copying text without tokens leaves the clipboard untouched', async () => {
+  test('rehydrate: "Keep tokens" inserts the token text unchanged', async () => {
     const t = setup();
     await t.start();
-    const c = await t.fireCopy('just some normal copied text');
-    expect(c.setData).not.toHaveBeenCalled();
-    expect(c.e.preventDefault).not.toHaveBeenCalled();
+    const token = await dehydrateToken(t);
+
+    await t.firePaste(t.makeEvent(`const key = "${token}";`));
+    lastOnAction()('paste');
+    const out = (document.execCommand as ReturnType<typeof vi.fn>).mock.calls.at(-1)![2];
+    expect(out).toBe(`const key = "${token}";`);
+    expect(out).not.toContain(SECRET);
+  });
+
+  test('rehydrate: "Cancel" drops the paste (nothing inserted)', async () => {
+    const t = setup();
+    await t.start();
+    const token = await dehydrateToken(t);
+    const insertsBefore = (document.execCommand as ReturnType<typeof vi.fn>).mock.calls.length;
+
+    await t.firePaste(t.makeEvent(`const key = "${token}";`));
+    lastOnAction()('cancel');
+    expect((document.execCommand as ReturnType<typeof vi.fn>).mock.calls.length).toBe(insertsBefore);
+  });
+
+  test('rehydrate: pasting text without tokens is left untouched', async () => {
+    const t = setup();
+    await t.start();
+    const e = t.makeEvent('just some normal pasted text');
+    await t.firePaste(e);
+
+    expect(e.preventDefault).not.toHaveBeenCalled();
+    expect(document.execCommand).not.toHaveBeenCalled();
   });
 
   test('large paste routes to Ghost: summary overlay, Sanitize & paste strips IPs/emails', async () => {
@@ -228,8 +336,8 @@ describe('createPasteGuard', () => {
     const inserted = (document.execCommand as ReturnType<typeof vi.fn>).mock.calls.at(-1)![2];
     expect(inserted).not.toContain('10.0.0.5');
     expect(inserted).not.toContain('ops@corp.com');
-    expect(inserted).toContain('‹ip_1›');
-    expect(inserted).toContain('‹email_1›');
+    expect(inserted).toContain('[#IP_1#]');
+    expect(inserted).toContain('[#EMAIL_1#]');
   });
 
   test('small paste uses the normal per-finding overlay (no Ghost summary)', async () => {
@@ -413,6 +521,8 @@ describe('createPasteGuard', () => {
 describe('fallback guard (catch-all)', () => {
   beforeEach(() => {
     fakeBrowser.reset();
+    proRef.value = true; // default: pro unlocked
+    anonRef.value = true; // default: anonymise allowed (quota available)
     mountOverlayMock.mockReset();
     mountOverlayMock.mockResolvedValue({ remove: vi.fn() });
     document.execCommand = vi.fn(() => true);

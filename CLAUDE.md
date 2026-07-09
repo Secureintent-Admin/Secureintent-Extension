@@ -117,7 +117,7 @@ src/
     config/                     # ConfigBundle shapes, store, validate, verify (Ed25519), default fallback
     api/client.ts               # getJson (no-store) + postJson (keepalive) + API_BASE
     telemetry/                  # TelemetryEvent types (build/send now live in services/)
-    features/                   # open-core feature registry (registerFeature / notify*)
+    features/                   # internal feature-hook registry (registerFeature / notify*)
     badge.ts                    # per-tab intercepted-count toolbar badge
     settings/index.ts           # enabled toggle, blocked count, session-lock config
     debug/index.ts              # siDebug / siError / elapsedMs structured console output
@@ -129,7 +129,7 @@ src/
     Overlay.tsx                 # paste warning: detections, masked snippets, 3 actions
     SessionLock.tsx / LockWarning.tsx
     mount.ts / mountSessionLock.ts / mountLockWarning.ts   # createShadowRootUi wrappers (test-excluded)
-  core.ts                       # semver'd public API barrel (@secureintent/core) — pro imports this
+  core.ts                       # internal API barrel (reusable guard/overlay/detection exports)
   components/Logo.tsx           # brand mark (inlined SVG, renders inside closed shadow DOM)
   public/ assets/               # static + bundled assets
 ```
@@ -173,20 +173,26 @@ same per-install salt + SHA-256 as the fingerprint module (never stored plaintex
 `sessionStorage` flag survives a reload (a refresh can't bypass the lock) and clears on tab close.
 Fails open on error.
 
-## Open-core seam
+## Free & paid tiers (single build)
 
-This repo is the **public, source-available (view-only — see [LICENSE](LICENSE))** half. Premium lives
-in a separate private repo (`backend/` + `pro/`) and plugs in — it never edits this code. See
-[docs/open-core.md](docs/open-core.md).
+There is **no open-core split**. One build ships both the free and the paid features; the extension is
+a single product with free and paid tiers, not a public core plus a private pro repo. The repo is
+still **source-available (view-only — see [LICENSE](LICENSE))**.
 
-- `src/lib/features/` — feature registry. Pro calls `registerFeature`; the guard fires
-  `notifyDetections`/`notifyAction`. No-op in this (free) build.
-- Hooks get detection **metadata only** (counts/types/labels). Raw clipboard text is never passed to a
-  feature — same hard privacy boundary as everywhere.
-- `src/core.ts` — the semver'd public API the pro repo imports. Keep it stable; refactor internals
-  freely behind it.
-- Dependency points one way: **pro → core, never reverse.** Core must never import from or reference
-  pro. `BUILD_TARGET=free|pro` in `wxt.config.ts` (free default).
+- Paid features (`rehydrate`, `ghost`, `session_lock`) ship in this build but are **gated at runtime**
+  by a signed entitlement fetched from the Worker for the signed-in Clerk user — see `src/lib/entitlement/`
+  and the Clerk/Paddle wiring in `src/services/entitlementBackground.ts`. The entitlement blob is
+  Ed25519-signed (same verify path as the config bundle) and evaluated locally; it **fails safe to
+  free** on any invalid/expired/missing state.
+- Client-side gating is a UX gate, **not** the security boundary: the source is viewable and the checks
+  are patchable. The valuable logic and license truth live server-side in `backend/` — treat the client
+  gate as convenience, not enforcement.
+- `src/lib/features/` — internal feature-hook registry (`registerFeature` + `notifyDetections`/
+  `notifyAction`). Hooks get detection **metadata only** (counts/types/labels); raw clipboard text is
+  never passed, same hard privacy boundary as everywhere.
+- `src/core.ts` — internal API barrel that groups the reusable guard/overlay/detection exports. Retained
+  as a convenience seam; it is **no longer an external publish target** (no `@secureintent/core` package,
+  no `BUILD_TARGET=pro` build).
 
 ## WXT conventions
 

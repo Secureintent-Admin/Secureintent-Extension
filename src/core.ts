@@ -1,12 +1,9 @@
 /**
- * Public API surface for the open-core seam.
- *
- * The free extension is published from this barrel as `@secureintent/core`.
- * The private "pro" repo imports from here to reuse the guard, overlay, and
- * config plumbing, and registers premium behaviour via `registerFeature`.
- *
- * Keep this file's exports stable and semver'd — pro depends on them. Internal
- * modules can be refactored freely as long as this surface holds.
+ * Internal API barrel: groups the reusable guard, overlay, config, and detection
+ * exports in one place. There is no open-core split — the extension is a single
+ * build with free and paid tiers (paid features gated at runtime by a signed
+ * entitlement; see `src/lib/entitlement/`). This barrel is a convenience seam,
+ * not an external package.
  */
 
 // Build on top of the paste guard.

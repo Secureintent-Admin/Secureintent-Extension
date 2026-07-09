@@ -16,6 +16,22 @@ function overlaps(a: Detection, b: Detection): boolean {
 }
 
 /**
+ * True when the match sits inside a URL — its surrounding whitespace-delimited
+ * token carries a scheme (`https://…`) or a `domain.tld/path`. High-entropy path
+ * segments (Loom share ids, Google Drive file ids, …) are links, not secrets, so
+ * entropy hits there are skipped to cut false positives. Specific key patterns
+ * (gh*_, AIza…) are unaffected — a real key in a URL is still flagged.
+ */
+function inUrl(text: string, start: number, end: number): boolean {
+  let l = start;
+  while (l > 0 && !/\s/.test(text[l - 1])) l--;
+  let r = end;
+  while (r < text.length && !/\s/.test(text[r])) r++;
+  const token = text.slice(l, r);
+  return token.includes('://') || /[a-z0-9.-]+\.[a-z]{2,}\/\S/i.test(token);
+}
+
+/**
  * Scan text for secrets using the pattern catalog. Pure: no DOM, no async.
  * Overlapping matches are resolved by specificity (private-key > known-key >
  * env-credential, then longer match wins). Returns detections sorted by start.
@@ -32,6 +48,10 @@ export function detectSecrets(text: string, patterns: Pattern[] = PATTERNS): Det
         continue;
       }
       if (validateMatch(pattern.validate, m[0])) {
+        // Generic entropy hits inside a URL are link ids (Loom/Drive/…), not secrets.
+        if (pattern.validate === 'entropy' && inUrl(text, m.index, m.index + m[0].length)) {
+          continue;
+        }
         raw.push({
           type: pattern.type,
           label: pattern.label,

@@ -39,7 +39,7 @@ test('large log paste shows the Ghost summary and Sanitize & paste strips everyt
 
   // Summary overlay (not the per-finding list) — it names the categories found.
   await expect(overlay).toBeAttached({ timeout: 5_000 });
-  await expect(overlay.getByText(/Internal IP/)).toBeVisible({ timeout: 5_000 });
+  await expect(overlay.getByText(/IP address/)).toBeVisible({ timeout: 5_000 });
   await expect(overlay.getByText(/Email address/)).toBeVisible();
 
   await overlay.getByText('Sanitize & paste', { exact: true }).click();
@@ -52,10 +52,10 @@ test('large log paste shows the Ghost summary and Sanitize & paste strips everyt
   expect(out).not.toContain('192.168.1.10');
   expect(out).not.toContain('ops@corp.example');
   // …replaced by typed placeholders, with the repeated IP correlated to one token.
-  expect(out).toContain('‹secret_1›');
-  expect(out).toContain('‹email_1›');
-  expect((out.match(/‹ip_1›/g) ?? []).length).toBe(2); // 10.0.4.21 appeared twice
-  expect(out).toContain('‹ip_2›'); // 192.168.1.10
+  expect(out).toContain('[#SECRET_1#]');
+  expect(out).toContain('[#EMAIL_1#]');
+  expect((out.match(/\[#IP_1#\]/g) ?? []).length).toBe(2); // 10.0.4.21 appeared twice
+  expect(out).toContain('[#IP_2#]'); // 192.168.1.10
 
   await page.close();
 });

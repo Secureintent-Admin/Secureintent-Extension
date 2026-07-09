@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Logo } from '@/components/Logo';
 import { type Detection, type GhostSummary, locateInText } from '@/lib/detection';
 
-export type OverlayAction = 'paste' | 'redact' | 'cancel' | 'sanitize';
+export type OverlayAction = 'paste' | 'redact' | 'cancel' | 'sanitize' | 'upgrade' | 'rehydrate';
 
 export interface OverlayProps {
   site: string;
@@ -10,10 +10,22 @@ export interface OverlayProps {
   detections: Detection[];
   /** When set, render the compact Ghost summary instead of a per-finding list. */
   summary?: GhostSummary;
+  /** When set, render the rehydrate prompt (pasted text contains our tokens). */
+  rehydrate?: { tokenCount: number };
+  /** Whether the user's plan unlocks the pro actions (anonymize / sanitize). */
+  pro?: boolean;
   onAction: (action: OverlayAction) => void;
 }
 
-export function Overlay({ site, text, detections, summary, onAction }: OverlayProps) {
+export function Overlay({
+  site,
+  text,
+  detections,
+  summary,
+  rehydrate,
+  pro = true,
+  onAction,
+}: OverlayProps) {
   const [expanded, setExpanded] = useState<number | null>(null);
 
   useEffect(() => {
@@ -24,7 +36,11 @@ export function Overlay({ site, text, detections, summary, onAction }: OverlayPr
     return () => window.removeEventListener('keydown', onKey, true);
   }, [onAction]);
 
-  if (summary) return <GhostSummaryView site={site} summary={summary} onAction={onAction} />;
+  if (rehydrate)
+    return <RehydrateView site={site} tokenCount={rehydrate.tokenCount} onAction={onAction} />;
+
+  if (summary)
+    return <GhostSummaryView site={site} summary={summary} pro={pro} onAction={onAction} />;
 
   return (
     <div className="si-scrim" onClick={() => onAction('cancel')}>
@@ -103,8 +119,83 @@ export function Overlay({ site, text, detections, summary, onAction }: OverlayPr
           <button type="button" className="si-btn si-btn-danger" onClick={() => onAction('paste')}>
             Paste anyway
           </button>
-          <button type="button" className="si-btn si-btn-mint" onClick={() => onAction('redact')}>
-            Paste anonymously
+          {pro ? (
+            <button type="button" className="si-btn si-btn-mint" onClick={() => onAction('redact')}>
+              Paste anonymously
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="si-btn si-btn-locked"
+              onClick={() => onAction('upgrade')}
+              title="Upgrade to anonymize secrets before pasting"
+            >
+              Paste anonymously · Pro
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Prompt shown when a paste carries our anonymized tokens: restore or keep them. */
+function RehydrateView({
+  site,
+  tokenCount,
+  onAction,
+}: {
+  site: string;
+  tokenCount: number;
+  onAction: (action: OverlayAction) => void;
+}) {
+  const many = tokenCount !== 1;
+  return (
+    <div className="si-scrim" onClick={() => onAction('cancel')}>
+      <div
+        className="si-hud"
+        role="alertdialog"
+        aria-modal="true"
+        aria-label={`Restore anonymized secrets before pasting into ${site}`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="si-top">
+          <span className="si-brand">
+            <Logo size={22} />
+            <span className="si-wordmark">
+              SecureIntent<span className="si-ai">.ai</span>
+            </span>
+          </span>
+          <button
+            type="button"
+            className="si-x"
+            aria-label="Cancel"
+            onClick={() => onAction('cancel')}
+          >
+            &times;
+          </button>
+        </div>
+
+        <div className="si-rule" />
+
+        <p className="si-ghost-lead">
+          This paste contains {tokenCount} anonymized {many ? 'tokens' : 'token'}. Restore the
+          original {many ? 'secrets' : 'secret'} before pasting?
+        </p>
+
+        <div className="si-actions">
+          <button type="button" className="si-btn si-btn-ghost" onClick={() => onAction('cancel')}>
+            Cancel
+          </button>
+          <button type="button" className="si-btn si-btn-ghost" onClick={() => onAction('paste')}>
+            Paste as-is
+          </button>
+          <button
+            type="button"
+            className="si-btn si-btn-mint"
+            onClick={() => onAction('rehydrate')}
+          >
+            Rehydrate
           </button>
         </div>
       </div>
@@ -116,10 +207,12 @@ export function Overlay({ site, text, detections, summary, onAction }: OverlayPr
 function GhostSummaryView({
   site,
   summary,
+  pro,
   onAction,
 }: {
   site: string;
   summary: GhostSummary;
+  pro: boolean;
   onAction: (action: OverlayAction) => void;
 }) {
   return (
@@ -170,9 +263,24 @@ function GhostSummaryView({
           <button type="button" className="si-btn si-btn-danger" onClick={() => onAction('paste')}>
             Paste anyway
           </button>
-          <button type="button" className="si-btn si-btn-mint" onClick={() => onAction('sanitize')}>
-            Sanitize &amp; paste
-          </button>
+          {pro ? (
+            <button
+              type="button"
+              className="si-btn si-btn-mint"
+              onClick={() => onAction('sanitize')}
+            >
+              Sanitize &amp; paste
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="si-btn si-btn-locked"
+              onClick={() => onAction('upgrade')}
+              title="Upgrade to sanitize large pastes"
+            >
+              Sanitize &amp; paste · Pro
+            </button>
+          )}
         </div>
       </div>
     </div>

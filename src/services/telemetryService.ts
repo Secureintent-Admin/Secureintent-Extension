@@ -6,6 +6,10 @@ export function buildEvent(input: {
   policyVersion: number;
   detections: TelemetryDetection[];
   action: TelemetryAction;
+  plan: string;
+  source: string;
+  signedIn: boolean;
+  businessDomain: string | null;
 }): TelemetryEvent {
   return { eventId: crypto.randomUUID(), ...input };
 }

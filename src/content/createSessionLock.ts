@@ -1,5 +1,6 @@
 import { type ContentScriptContext, storage } from '#imports';
 import { siDebug, siError } from '@/lib/debug';
+import { hasFeature } from '@/lib/entitlement';
 import { getOrCreateSalt, type KeyValueStore } from '@/lib/fingerprint';
 import { verifyPin } from '@/lib/lock';
 import { type LockWarningHandle, mountLockWarning } from '@/overlay/mountLockWarning';
@@ -22,6 +23,11 @@ const ACTIVITY_EVENTS = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'
  */
 export async function createSessionLock(ctx: ContentScriptContext): Promise<void> {
   try {
+    // Session Lock is a pro feature — inert unless the plan unlocks it.
+    if (!(await hasFeature('session_lock'))) {
+      siDebug('session-lock', 'inert', { reason: 'not entitled' });
+      return;
+    }
     const { enabled, pinHash, timeoutMs } = await getSessionLockConfig();
     if (!enabled || !pinHash) {
       siDebug('session-lock', 'inert', { enabled, hasPin: Boolean(pinHash) });

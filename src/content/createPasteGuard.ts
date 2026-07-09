@@ -11,6 +11,8 @@ import {
   TOKEN_RE,
   tokenizeSecrets,
 } from '@/lib/detection';
+import { getEntitlementSnapshot, hasFeatureCached, initEntitlementCache } from '@/lib/entitlement';
+import { canAnonymize, consumeAnonymize } from '@/lib/quota';
 import { notifyAction, notifyDetections } from '@/lib/features';
 import {
   computeFingerprint,
@@ -68,6 +70,25 @@ function insertText(el: HTMLElement, text: string): void {
       sel.collapseToEnd();
     }
   }
+
+  // Slate editors (e.g. Discord, Notion) keep their own model and ignore
+  // execCommand inserts — the text appears but the message stays unsendable.
+  // Feed them a synthetic paste instead, which their paste handler reconciles
+  // into editor state. (Our guard ignores it: it's not a trusted event.)
+  const slate = el.closest('[data-slate-editor="true"]');
+  if (slate) {
+    try {
+      const dt = new DataTransfer();
+      dt.setData('text/plain', text);
+      const handled = !slate.dispatchEvent(
+        new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }),
+      );
+      if (handled) return; // editor consumed the paste
+    } catch {
+      // DataTransfer/ClipboardEvent unavailable — fall through to execCommand.
+    }
+  }
+
   document.execCommand('insertText', false, text);
 }
 
@@ -99,6 +120,10 @@ export async function createPasteGuard(
     enabled = value ?? true;
   });
 
+  // Prime the entitlement cache so the gate can be read synchronously in the
+  // overlay action handler (pro features: rehydrate / ghost).
+  await initEntitlementCache();
+
   const bundle = await getActiveBundle();
   const compiled = compilePatterns(bundle.patterns);
   // entropy patterns are pilot-only; standard tuning (aggressive: false) drops them
@@ -121,50 +146,16 @@ export async function createPasteGuard(
 
   const origin = location.origin;
 
-  // In-memory token→secret cache. The copy handler must rewrite the clipboard
-  // synchronously (before any await), so it cannot read the async session vault
-  // directly; this Map mirrors it. RAM-only, cleared on page unload. Hydrated
-  // from the session vault so tokens survive a same-session page reload.
+  // In-memory token→secret cache for rehydration. The paste handler swaps tokens
+  // back synchronously, so it reads from this Map rather than the async session
+  // vault. RAM-only, cleared on page unload; hydrated from the session vault so
+  // tokens survive a same-session page reload.
   const memVault = new Map<string, string>();
   vaultSnapshot(sessionStore, origin, Date.now())
     .then((snap) => {
       for (const [token, secret] of Object.entries(snap)) memVault.set(token, secret);
     })
     .catch((err) => siError(config.name, 'vault hydrate failed', err));
-
-  // Rehydrate: when the user copies the model's reply, swap any of our tokens
-  // back to the real secrets so pasted-back code just works. Must run fully
-  // synchronously (clipboard mutation has to happen inside the copy event).
-  // Fails open: any error leaves the native copy untouched.
-  ctx.addEventListener(
-    document,
-    'copy',
-    (event) => {
-      try {
-        const e = event as ClipboardEvent;
-        const selection = window.getSelection()?.toString() ?? '';
-        if (!selection || !TOKEN_RE.test(selection)) return; // nothing of ours
-        const tokens = new Set(selection.match(TOKEN_GLOBAL) ?? []);
-        let out = selection;
-        let changed = false;
-        for (const token of tokens) {
-          const secret = memVault.get(token);
-          if (secret !== undefined) {
-            out = out.split(token).join(secret);
-            changed = true;
-          }
-        }
-        if (!changed) return; // tokens unknown/expired — leave the copy untouched
-        e.clipboardData?.setData('text/plain', out);
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        siDebug(config.name, 'rehydrated copy', { tokens: tokens.size });
-      } catch (err) {
-        siError(config.name, 'rehydrate error, copy left unchanged', err);
-      }
-    },
-    { capture: true },
-  );
 
   ctx.addEventListener(
     document,
@@ -187,6 +178,44 @@ export async function createPasteGuard(
         const text = e.clipboardData?.getData('text/plain') ?? '';
         if (!text) return;
 
+        // Rehydrate: if the pasted text carries our tokens, prompt to swap them
+        // back to the real secrets at insert time (or keep the tokens / cancel).
+        // The secret stays out of the OS clipboard — it only ever materializes on
+        // insert. Fails open on any error.
+        if (TOKEN_RE.test(text)) {
+          const tokens = new Set(text.match(TOKEN_GLOBAL) ?? []);
+          let restored = text;
+          let known = 0;
+          for (const token of tokens) {
+            const secret = memVault.get(token);
+            if (secret !== undefined) {
+              restored = restored.split(token).join(secret);
+              known++;
+            }
+          }
+          if (known > 0) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            open = true;
+            const overlay = await mountOverlay(ctx, {
+              site: config.name,
+              text,
+              detections: [],
+              rehydrate: { tokenCount: known },
+              onAction: (action) => {
+                if (action === 'rehydrate') insertText(input, restored);
+                else if (action === 'paste') insertText(input, text); // keep tokens as-is
+                // cancel → drop the paste entirely
+                overlay.remove();
+                open = false;
+                siDebug(config.name, 'rehydrate prompt', { action, tokens: known });
+              },
+            });
+            return;
+          }
+          // Unknown/expired tokens aren't secrets — fall through to normal handling.
+        }
+
         // Large pastes look like log/terminal dumps: take the aggressive Ghost
         // path (expanded ruleset + summary overlay) instead of the per-finding one.
         const ghostMode = text.length >= ghostMin;
@@ -204,8 +233,8 @@ export async function createPasteGuard(
           .sendMessage({ type: 'si-detected', count: detections.length })
           .catch(() => {});
 
-        // Open-core seam: premium features observe detections (metadata only —
-        // raw text is never passed). Fire-and-forget; no-op in the free build.
+        // Feature-hook seam: registered features observe detections (metadata
+        // only — raw text is never passed). Fire-and-forget.
         const featureCtx = {
           site: config.name,
           siteKey: config.siteKey,
@@ -238,6 +267,12 @@ export async function createPasteGuard(
               },
             );
 
+        // Gate the pro action for this overlay. Ghost pastes need the `ghost`
+        // feature (Pro-only). Standard anonymise is free with a monthly quota,
+        // then Pro — canAnonymize() reflects Pro OR remaining free allowance.
+        const snapshot = getEntitlementSnapshot();
+        const proAction = ghostMode ? hasFeatureCached('ghost') : await canAnonymize(snapshot);
+
         open = true;
         const tMount = performance.now();
         const overlay = await mountOverlay(ctx, {
@@ -245,14 +280,26 @@ export async function createPasteGuard(
           text,
           detections,
           summary: ghostMode ? summarize(detections) : undefined,
+          pro: proAction,
           onAction: (action) => {
+            if (action === 'upgrade') {
+              // Hand off to the background to open the Paddle checkout tab.
+              browser.runtime.sendMessage({ type: 'si-open-checkout' }).catch(() => {});
+              overlay.remove();
+              open = false;
+              return;
+            }
+            if (action === 'rehydrate') return; // only the rehydrate overlay emits this
             if (action === 'paste') insertText(input, text);
-            else if (action === 'sanitize') {
+            else if (action === 'sanitize' && proAction) {
               // Ghost: strip every finding to a typed placeholder. Irreversible.
               insertText(input, sanitize(text, detections));
-            } else if (action === 'redact') {
+            } else if (action === 'redact' && proAction) {
+              // Count this Anonymise & Paste against the monthly quota (no-op for
+              // Pro). Fire-and-forget — canAnonymize() already gated the action.
+              consumeAnonymize(snapshot).catch(() => {});
               // Dehydrate: replace secrets with reversible tokens and stash the
-              // token→secret map so a later copy can rehydrate them.
+              // token→secret map so a later paste can rehydrate them.
               const { text: masked, entries } = tokenizeSecrets(text, detections);
               insertText(input, masked);
               for (const { token, secret } of entries) memVault.set(token, secret); // sync read path
@@ -271,6 +318,10 @@ export async function createPasteGuard(
                     policyVersion: bundle.version,
                     detections: dets,
                     action: telemetryAction,
+                    plan: snapshot.plan,
+                    source: snapshot.source,
+                    signedIn: snapshot.signedIn,
+                    businessDomain: snapshot.businessDomain,
                   }),
                 );
               });

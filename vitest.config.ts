@@ -11,6 +11,7 @@ export default defineConfig({
       'src/overlay/**/*.test.{ts,tsx}',
       'src/services/**/*.test.{ts,tsx}',
       'src/settings/**/*.test.{ts,tsx}',
+      'src/entrypoints/**/*.test.{ts,tsx}',
     ],
     coverage: {
       provider: 'v8',
