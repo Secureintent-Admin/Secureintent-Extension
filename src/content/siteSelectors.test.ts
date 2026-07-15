@@ -12,6 +12,7 @@ const CASES: { siteKey: keyof typeof DEFAULT_BUNDLE.sites; fixture: string }[] =
   { siteKey: 'deepseek', fixture: 'deepseek.html' },
   { siteKey: 'duck', fixture: 'duck.ai.html' },
   { siteKey: 'githubcopilot', fixture: 'github-copilot.html' },
+  { siteKey: 'grok', fixture: 'grok.html' },
   { siteKey: 'kimi', fixture: 'kimi.html' },
   { siteKey: 'qwen', fixture: 'qwen.html' },
 ];

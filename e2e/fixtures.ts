@@ -2,7 +2,15 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { type BrowserContext, chromium, test as base } from '@playwright/test';
 
-declare const chrome: { storage: { local: { remove(keys: string[]): Promise<void> } } };
+declare const chrome: {
+  storage: {
+    local: { remove(keys: string[]): Promise<void> };
+    sync: {
+      set(items: Record<string, unknown>): Promise<void>;
+      remove(keys: string[]): Promise<void>;
+    };
+  };
+};
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 const EXT = path.resolve(dirname, '../dist/chrome-mv3');
@@ -42,7 +50,12 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
       // getActiveBundle falls back to the bundled DEFAULT_BUNDLE under test.
       let [sw] = context.serviceWorkers();
       if (!sw) sw = await context.waitForEvent('serviceworker');
-      await sw.evaluate(() => chrome.storage.local.remove(['si_config', 'si_config_synced']));
+      await sw.evaluate(() => {
+        chrome.storage.local.remove(['si_config', 'si_config_synced']);
+        // Pre-accept Terms & Privacy so guard-behavior specs exercise the paste
+        // warning, not the first-run consent gate. The consent spec clears this.
+        chrome.storage.sync.set({ si_terms_consent: { version: 1, acceptedAt: Date.now() } });
+      });
       await use(context);
       await context.close();
     },

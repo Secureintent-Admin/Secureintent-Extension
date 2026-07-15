@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
 import { DEFAULT_BUNDLE, saveBundle } from '@/lib/config';
+import { acceptTerms, consentItem } from '@/lib/consent';
 import type { OverlayAction } from '@/overlay/Overlay';
 import * as telemetryService from '@/services/telemetryService';
 import { getBlockedCount, setEnabled } from '@/settings';
@@ -9,6 +10,10 @@ import { createPasteGuard } from './createPasteGuard';
 // Mock the shadow-DOM overlay: capture props, return a fake handle.
 const { mountOverlayMock } = vi.hoisted(() => ({ mountOverlayMock: vi.fn() }));
 vi.mock('../overlay/mount', () => ({ mountOverlay: mountOverlayMock }));
+
+// Mock the consent gate mount (closed shadow DOM can't render in jsdom).
+const { mountConsentGateMock } = vi.hoisted(() => ({ mountConsentGateMock: vi.fn() }));
+vi.mock('../overlay/mountConsentGate', () => ({ mountConsentGate: mountConsentGateMock }));
 
 // Mock the entitlement gate. Default: pro unlocked (existing behavior tests).
 // proRef.value → ghost gating (hasFeatureCached). anonRef.value → anonymise
@@ -89,18 +94,54 @@ function lastOnAction(): (a: OverlayAction) => void {
 const sendTelemetrySpy = vi.spyOn(telemetryService, 'sendTelemetry').mockImplementation(() => {});
 
 describe('createPasteGuard', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     fakeBrowser.reset();
+    await acceptTerms(); // default: Terms already accepted (existing behavior tests)
     proRef.value = true; // default: pro unlocked
     anonRef.value = true; // default: anonymise allowed (quota available)
     mountOverlayMock.mockReset();
     mountOverlayMock.mockResolvedValue({ remove: vi.fn() });
+    mountConsentGateMock.mockReset();
+    mountConsentGateMock.mockResolvedValue({ remove: vi.fn() });
     document.execCommand = vi.fn(() => true);
     sendTelemetrySpy.mockClear();
     // reset the cross-content-script "a dedicated guard is active" window flag
     (window as unknown as Record<string, boolean>).__secureintentDedicated__ = false;
   });
   afterEach(() => document.body.replaceChildren());
+
+  test('unconsented first paste shows the consent gate (not the warning); agreeing then warns', async () => {
+    await consentItem.setValue(null); // Terms not yet accepted
+    const t = setup();
+    await t.start();
+    await t.firePaste(t.makeEvent(`x ${SECRET} y`));
+
+    // Consent gate shown; the actual secret warning is withheld until they agree.
+    expect(mountConsentGateMock).toHaveBeenCalledTimes(1);
+    expect(mountOverlayMock).not.toHaveBeenCalled();
+
+    // Agree → consent recorded and the real warning now shows for this same paste.
+    const gateProps = mountConsentGateMock.mock.calls[0][1] as {
+      onAgree: () => void;
+      onCancel: () => void;
+    };
+    gateProps.onAgree();
+    await vi.waitFor(() => expect(mountOverlayMock).toHaveBeenCalledTimes(1));
+    await vi.waitFor(async () => expect(await consentItem.getValue()).not.toBeNull());
+  });
+
+  test('unconsented paste that is then cancelled inserts nothing', async () => {
+    await consentItem.setValue(null);
+    const t = setup();
+    await t.start();
+    await t.firePaste(t.makeEvent(`x ${SECRET} y`));
+
+    const gateProps = mountConsentGateMock.mock.calls[0][1] as { onCancel: () => void };
+    gateProps.onCancel();
+    expect(mountOverlayMock).not.toHaveBeenCalled();
+    expect(document.execCommand).not.toHaveBeenCalled();
+    expect(await consentItem.getValue()).toBeNull(); // still not accepted
+  });
 
   test('lets a clean paste through without blocking', async () => {
     const t = setup();
@@ -308,7 +349,9 @@ describe('createPasteGuard', () => {
 
     await t.firePaste(t.makeEvent(`const key = "${token}";`));
     lastOnAction()('cancel');
-    expect((document.execCommand as ReturnType<typeof vi.fn>).mock.calls.length).toBe(insertsBefore);
+    expect((document.execCommand as ReturnType<typeof vi.fn>).mock.calls.length).toBe(
+      insertsBefore,
+    );
   });
 
   test('rehydrate: pasting text without tokens is left untouched', async () => {
@@ -519,12 +562,15 @@ describe('createPasteGuard', () => {
 });
 
 describe('fallback guard (catch-all)', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     fakeBrowser.reset();
+    await acceptTerms(); // default: Terms already accepted (existing behavior tests)
     proRef.value = true; // default: pro unlocked
     anonRef.value = true; // default: anonymise allowed (quota available)
     mountOverlayMock.mockReset();
     mountOverlayMock.mockResolvedValue({ remove: vi.fn() });
+    mountConsentGateMock.mockReset();
+    mountConsentGateMock.mockResolvedValue({ remove: vi.fn() });
     document.execCommand = vi.fn(() => true);
     (window as unknown as Record<string, boolean>).__secureintentDedicated__ = false;
   });

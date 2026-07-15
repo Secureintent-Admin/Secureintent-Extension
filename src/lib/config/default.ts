@@ -113,7 +113,10 @@ export const DEFAULT_BUNDLE: ConfigBundle = {
     gemini: { inputSelector: 'div.ql-editor[contenteditable="true"]' },
     perplexity: { inputSelector: '#ask-input[contenteditable="true"]' },
     copilot: { inputSelector: 'textarea#userInput' },
-    grok: { inputSelector: 'textarea[aria-label="Ask Grok anything"]' },
+    grok: {
+      inputSelector:
+        'div[contenteditable="true"][aria-label="Ask Grok anything"], [data-testid="chat-input"] div[contenteditable="true"]',
+    },
     mistral: { inputSelector: 'div.ProseMirror[contenteditable="true"]' },
     meta: { inputSelector: 'input[placeholder^="Ask Meta AI"]' },
     poe: { inputSelector: 'textarea[class*="GrowingTextArea_textArea"]' },

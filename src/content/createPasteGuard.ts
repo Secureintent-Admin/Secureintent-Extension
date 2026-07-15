@@ -1,5 +1,6 @@
 import { browser, type ContentScriptContext, storage } from '#imports';
 import { DEFAULT_BUNDLE, getActiveBundle } from '@/lib/config';
+import { acceptTerms, consentItem, consentSatisfied, isConsentAccepted } from '@/lib/consent';
 import { elapsedMs, siDebug, siError } from '@/lib/debug';
 import {
   compilePatterns,
@@ -12,7 +13,6 @@ import {
   tokenizeSecrets,
 } from '@/lib/detection';
 import { getEntitlementSnapshot, hasFeatureCached, initEntitlementCache } from '@/lib/entitlement';
-import { canAnonymize, consumeAnonymize } from '@/lib/quota';
 import { notifyAction, notifyDetections } from '@/lib/features';
 import {
   computeFingerprint,
@@ -20,9 +20,11 @@ import {
   getOrCreateSalt,
   type KeyValueStore,
 } from '@/lib/fingerprint';
+import { canAnonymize, consumeAnonymize } from '@/lib/quota';
 import type { TelemetryAction } from '@/lib/telemetry/types';
 import { type VaultStore, vaultPut, vaultSnapshot } from '@/lib/vault';
 import { mountOverlay } from '@/overlay/mount';
+import { mountConsentGate } from '@/overlay/mountConsentGate';
 import { buildEvent, sendTelemetry } from '@/services/telemetryService';
 import { enabledItem, isEnabled, recordBlocked } from '@/settings';
 import { findComposer } from './findComposer';
@@ -113,6 +115,13 @@ export async function createPasteGuard(
 
   const salt = await getOrCreateSalt(browserStore);
   let open = false;
+
+  // Terms & Privacy consent, cached synchronously (read in the paste handler
+  // before any await). Blocking: no warning is shown until the user accepts.
+  let consented = await isConsentAccepted();
+  consentItem.watch((value) => {
+    consented = consentSatisfied(value);
+  });
 
   // preventDefault must run before any await, so cache enabled synchronously
   let enabled = await isEnabled();
@@ -227,116 +236,140 @@ export async function createPasteGuard(
         e.preventDefault();
         e.stopImmediatePropagation();
         recoverPaste = () => insertText(input, text);
-        recordBlocked(detections.length); // popup total; on-device only
-        // per-tab action badge (background owns browser.action)
-        browser.runtime
-          .sendMessage({ type: 'si-detected', count: detections.length })
-          .catch(() => {});
+        // Show the actual secret warning for this paste. Extracted so the
+        // consent gate can call it after the user agrees (first-paste consent).
+        const showWarning = async () => {
+          recordBlocked(detections.length); // popup total; on-device only
+          // per-tab action badge (background owns browser.action)
+          browser.runtime
+            .sendMessage({ type: 'si-detected', count: detections.length })
+            .catch(() => {});
 
-        // Feature-hook seam: registered features observe detections (metadata
-        // only — raw text is never passed). Fire-and-forget.
-        const featureCtx = {
-          site: config.name,
-          siteKey: config.siteKey,
-          detectionCount: detections.length,
-          types: detections.map((d) => d.type),
-          labels: detections.map((d) => d.label),
-        };
-        notifyDetections(featureCtx);
+          // Feature-hook seam: registered features observe detections (metadata
+          // only — raw text is never passed). Fire-and-forget.
+          const featureCtx = {
+            site: config.name,
+            siteKey: config.siteKey,
+            detectionCount: detections.length,
+            types: detections.map((d) => d.type),
+            labels: detections.map((d) => d.label),
+          };
+          notifyDetections(featureCtx);
 
-        // Telemetry is per-finding (one fingerprint each). Ghost pastes can hold
-        // hundreds of findings, so telemetry is skipped for them in this build.
-        const fingerprintsPromise = ghostMode
-          ? null
-          : Promise.all(
-              detections.map(async (d) => {
-                const fingerprint = await computeFingerprint(d.match, salt);
-                siDebug(config.name, 'fingerprint', { label: d.label, fingerprint });
-                return { fingerprint, type: d.type, label: d.label };
-              }),
-            ).catch(
-              (
-                err,
-              ): {
-                fingerprint: Fingerprint;
-                type: (typeof detections)[number]['type'];
-                label: string;
-              }[] => {
-                siError(config.name, 'fingerprint error, telemetry suppressed', err);
-                return [];
-              },
-            );
+          // Telemetry is per-finding (one fingerprint each). Ghost pastes can hold
+          // hundreds of findings, so telemetry is skipped for them in this build.
+          const fingerprintsPromise = ghostMode
+            ? null
+            : Promise.all(
+                detections.map(async (d) => {
+                  const fingerprint = await computeFingerprint(d.match, salt);
+                  siDebug(config.name, 'fingerprint', { label: d.label, fingerprint });
+                  return { fingerprint, type: d.type, label: d.label };
+                }),
+              ).catch(
+                (
+                  err,
+                ): {
+                  fingerprint: Fingerprint;
+                  type: (typeof detections)[number]['type'];
+                  label: string;
+                }[] => {
+                  siError(config.name, 'fingerprint error, telemetry suppressed', err);
+                  return [];
+                },
+              );
 
-        // Gate the pro action for this overlay. Ghost pastes need the `ghost`
-        // feature (Pro-only). Standard anonymise is free with a monthly quota,
-        // then Pro — canAnonymize() reflects Pro OR remaining free allowance.
-        const snapshot = getEntitlementSnapshot();
-        const proAction = ghostMode ? hasFeatureCached('ghost') : await canAnonymize(snapshot);
+          // Gate the pro action for this overlay. Ghost pastes need the `ghost`
+          // feature (Pro-only). Standard anonymise is free with a monthly quota,
+          // then Pro — canAnonymize() reflects Pro OR remaining free allowance.
+          const snapshot = getEntitlementSnapshot();
+          const proAction = ghostMode ? hasFeatureCached('ghost') : await canAnonymize(snapshot);
 
-        open = true;
-        const tMount = performance.now();
-        const overlay = await mountOverlay(ctx, {
-          site: config.name,
-          text,
-          detections,
-          summary: ghostMode ? summarize(detections) : undefined,
-          pro: proAction,
-          onAction: (action) => {
-            if (action === 'upgrade') {
-              // Hand off to the background to open the Paddle checkout tab.
-              browser.runtime.sendMessage({ type: 'si-open-checkout' }).catch(() => {});
+          open = true;
+          const tMount = performance.now();
+          const overlay = await mountOverlay(ctx, {
+            site: config.name,
+            text,
+            detections,
+            summary: ghostMode ? summarize(detections) : undefined,
+            pro: proAction,
+            onAction: (action) => {
+              if (action === 'upgrade') {
+                // Hand off to the background to open the pricing / tiers page.
+                browser.runtime.sendMessage({ type: 'si-open-tiers' }).catch(() => {});
+                overlay.remove();
+                open = false;
+                return;
+              }
+              if (action === 'rehydrate') return; // only the rehydrate overlay emits this
+              if (action === 'paste') insertText(input, text);
+              else if (action === 'sanitize' && proAction) {
+                // Ghost: strip every finding to a typed placeholder. Irreversible.
+                insertText(input, sanitize(text, detections));
+              } else if (action === 'redact' && proAction) {
+                // Count this Anonymise & Paste against the monthly quota (no-op for
+                // Pro). Fire-and-forget — canAnonymize() already gated the action.
+                consumeAnonymize(snapshot).catch(() => {});
+                // Dehydrate: replace secrets with reversible tokens and stash the
+                // token→secret map so a later paste can rehydrate them.
+                const { text: masked, entries } = tokenizeSecrets(text, detections);
+                insertText(input, masked);
+                for (const { token, secret } of entries) memVault.set(token, secret); // sync read path
+                vaultPut(sessionStore, origin, entries, Date.now()).catch((err) =>
+                  siError(config.name, 'vault put failed', err),
+                );
+              }
+              notifyAction({ ...featureCtx, action }); // pro: audit log / team report
+              if (!ghostMode && action !== 'sanitize' && fingerprintsPromise) {
+                const telemetryAction = ACTION_BY_OVERLAY[action];
+                fingerprintsPromise.then((dets) => {
+                  if (dets.length === 0) return;
+                  sendTelemetry(
+                    buildEvent({
+                      site: config.name,
+                      policyVersion: bundle.version,
+                      detections: dets,
+                      action: telemetryAction,
+                      plan: snapshot.plan,
+                      source: snapshot.source,
+                      signedIn: snapshot.signedIn,
+                      businessDomain: snapshot.businessDomain,
+                    }),
+                  );
+                });
+              }
               overlay.remove();
               open = false;
-              return;
-            }
-            if (action === 'rehydrate') return; // only the rehydrate overlay emits this
-            if (action === 'paste') insertText(input, text);
-            else if (action === 'sanitize' && proAction) {
-              // Ghost: strip every finding to a typed placeholder. Irreversible.
-              insertText(input, sanitize(text, detections));
-            } else if (action === 'redact' && proAction) {
-              // Count this Anonymise & Paste against the monthly quota (no-op for
-              // Pro). Fire-and-forget — canAnonymize() already gated the action.
-              consumeAnonymize(snapshot).catch(() => {});
-              // Dehydrate: replace secrets with reversible tokens and stash the
-              // token→secret map so a later paste can rehydrate them.
-              const { text: masked, entries } = tokenizeSecrets(text, detections);
-              insertText(input, masked);
-              for (const { token, secret } of entries) memVault.set(token, secret); // sync read path
-              vaultPut(sessionStore, origin, entries, Date.now()).catch((err) =>
-                siError(config.name, 'vault put failed', err),
-              );
-            }
-            notifyAction({ ...featureCtx, action }); // pro: audit log / team report
-            if (!ghostMode && action !== 'sanitize' && fingerprintsPromise) {
-              const telemetryAction = ACTION_BY_OVERLAY[action];
-              fingerprintsPromise.then((dets) => {
-                if (dets.length === 0) return;
-                sendTelemetry(
-                  buildEvent({
-                    site: config.name,
-                    policyVersion: bundle.version,
-                    detections: dets,
-                    action: telemetryAction,
-                    plan: snapshot.plan,
-                    source: snapshot.source,
-                    signedIn: snapshot.signedIn,
-                    businessDomain: snapshot.businessDomain,
-                  }),
-                );
-              });
-            }
-            overlay.remove();
-            open = false;
-          },
-        });
+            },
+          });
 
-        siDebug(config.name, 'paste blocked', {
-          secrets: detections.length,
-          types: detections.map((d) => d.type),
-          detectMs,
-          mountMs: elapsedMs(tMount),
-        });
+          siDebug(config.name, 'paste blocked', {
+            secrets: detections.length,
+            types: detections.map((d) => d.type),
+            detectMs,
+            mountMs: elapsedMs(tMount),
+          });
+        };
+
+        // Blocking consent gate: on the first paste that would warn, require the
+        // user to accept Terms & Privacy before the extension protects anything.
+        if (!consented) {
+          open = true;
+          const gate = await mountConsentGate(ctx, {
+            onAgree: () => {
+              acceptTerms().catch((err) => siError(config.name, 'consent save failed', err));
+              gate.remove();
+              void showWarning(); // now show the real warning for this same paste
+            },
+            onCancel: () => {
+              gate.remove();
+              open = false;
+            },
+          });
+          return;
+        }
+
+        await showWarning();
       } catch (err) {
         siError(config.name, 'paste guard error, allowing paste', err);
         recoverPaste?.(); // fail open: re-insert the text we blocked

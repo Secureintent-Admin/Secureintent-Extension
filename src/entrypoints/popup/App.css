@@ -24,53 +24,90 @@
   gap: 16px;
 }
 
-/* Protection status -------------------------------------------------------- */
-.si-protect {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  background: rgba(114, 255, 255, 0.06);
-  border: 1px solid var(--si-border);
+/* Protection hero ---------------------------------------------------------- */
+.si-hero {
+  position: relative;
+  overflow: hidden;
+  text-align: center;
+  padding: 18px 14px 20px;
+  border-radius: 16px;
+  border: 1px solid rgba(114, 255, 255, 0.18);
+  background:
+    radial-gradient(70% 90% at 50% 0%, rgba(114, 255, 255, 0.12), transparent 70%),
+    rgba(255, 255, 255, 0.015);
 }
-.si-protect-icon {
-  flex: 0 0 auto;
+.si-hero-ring {
+  display: grid;
+  place-items: center;
+  width: 66px;
+  height: 66px;
+  margin: 2px auto 12px;
+  border-radius: 50%;
   color: var(--si-cyan);
+  background: radial-gradient(
+    circle at 50% 38%,
+    rgba(114, 255, 255, 0.18),
+    rgba(114, 255, 255, 0.02)
+  );
+  border: 1px solid rgba(114, 255, 255, 0.3);
+  box-shadow:
+    0 0 34px -8px rgba(114, 255, 255, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
-.si-protect-lines {
-  display: flex;
-  flex-direction: column;
-  min-width: 0; /* lets the hostname truncate instead of overflowing */
-  line-height: 1.3;
-}
-.si-protect-label {
-  font-size: 12.5px;
-  font-weight: 600;
+.si-hero-title {
+  margin: 0;
+  font-family: var(--si-mono);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
   color: var(--si-text);
 }
-.si-protect-host {
+.si-hero-host {
+  display: inline-block;
+  margin-top: 8px;
+  max-width: 90%;
   font-family: var(--si-mono);
-  font-size: 11px;
+  font-size: 11.5px;
   color: var(--si-cyan);
+  background: rgba(114, 255, 255, 0.08);
+  border: 1px solid rgba(114, 255, 255, 0.2);
+  padding: 3px 10px;
+  border-radius: 999px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  vertical-align: bottom;
 }
-.si-protect--inactive {
-  background: rgba(255, 255, 255, 0.03);
-}
-.si-protect--inactive .si-protect-icon {
-  color: var(--si-faint);
-}
-.si-protect--inactive .si-protect-label {
+.si-hero-metric {
+  margin-top: 12px;
+  font-size: 11.5px;
   color: var(--si-muted);
 }
-.si-protect--paused {
-  background: rgba(255, 107, 107, 0.08);
+.si-hero-metric b {
+  color: var(--si-text);
+  font-family: var(--si-mono);
+  font-variant-numeric: tabular-nums;
 }
-.si-protect--paused .si-protect-icon {
+/* Inactive / paused states dim the ring and drop the cyan glow. */
+.si-hero--inactive,
+.si-hero--paused {
+  border-color: var(--si-border);
+  background: rgba(255, 255, 255, 0.02);
+}
+.si-hero--inactive .si-hero-ring {
+  color: var(--si-faint);
+  border-color: var(--si-border);
+  background: rgba(255, 255, 255, 0.03);
+  box-shadow: none;
+}
+.si-hero--inactive .si-hero-title {
+  color: var(--si-muted);
+}
+.si-hero--paused .si-hero-ring {
   color: var(--si-danger);
+  border-color: rgba(255, 107, 107, 0.3);
+  background: rgba(255, 107, 107, 0.06);
+  box-shadow: 0 0 30px -10px rgba(255, 107, 107, 0.4);
 }
 
 /* Header ------------------------------------------------------------------ */
@@ -106,70 +143,272 @@
   font-variant-numeric: tabular-nums;
 }
 /* Usage meter (Anonymise & Paste allowance) ------------------------------- */
-.si-usage {
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-  padding: 12px 14px;
+/* Plan checklist --------------------------------------------------------- */
+.si-plan {
+  padding: 12px 14px 8px;
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--si-border);
 }
-.si-usage-top {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
+.si-plan--in {
+  animation: si-plan-fade 220ms ease both;
 }
-.si-usage-label {
+@keyframes si-plan-fade {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Loading skeleton — shimmer bars matching the real layout. */
+.si-skel {
+  display: inline-block;
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.05) 25%,
+    rgba(255, 255, 255, 0.11) 37%,
+    rgba(255, 255, 255, 0.05) 63%
+  );
+  background-size: 300% 100%;
+  animation: si-shimmer 1.2s ease-in-out infinite;
+}
+.si-skel-tag {
+  margin-left: auto;
+  width: 58px;
+  height: 18px;
+  border-radius: 999px;
+}
+.si-skel-ic {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+}
+.si-skel-label {
+  width: 130px;
+  height: 11px;
+}
+.si-skel-state {
+  margin-left: auto;
+  width: 42px;
+  height: 11px;
+}
+@keyframes si-shimmer {
+  from {
+    background-position: 150% 0;
+  }
+  to {
+    background-position: -150% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .si-plan--in,
+  .si-skel {
+    animation: none;
+  }
+}
+.si-plan-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.si-plan-toggle {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  background: none;
+  border: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.si-plan-chev {
+  flex: 0 0 auto;
+  color: var(--si-faint);
+  transition: transform 200ms ease;
+}
+.si-plan-chev.is-open {
+  transform: rotate(90deg);
+}
+.si-plan-title {
   font-size: 12.5px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--si-text);
 }
-.si-usage-count {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 5px;
-  white-space: nowrap;
+/* Collapsible body — max-height keeps the toggle animation smooth. */
+.si-plan-body {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition:
+    max-height 240ms ease,
+    opacity 200ms ease,
+    overflow 0s;
 }
-.si-usage-count strong {
+/* Once expanded, allow overflow so feature tooltips aren't clipped — but only
+   after the max-height animation finishes (delayed transition on overflow). */
+.si-plan-body.is-open {
+  max-height: 460px;
+  opacity: 1;
+  overflow: visible;
+  transition:
+    max-height 240ms ease,
+    opacity 200ms ease,
+    overflow 0s linear 240ms;
+}
+.si-plan-tag {
   font-family: var(--si-mono);
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--si-cyan);
-  font-variant-numeric: tabular-nums;
-}
-.si-usage-of {
-  font-size: 11.5px;
-  color: var(--si-muted);
-}
-.si-usage-pro {
-  font-family: var(--si-mono);
-  font-size: 12px;
+  font-size: 10.5px;
   font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--si-muted);
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--si-border);
+}
+.si-plan-tag.is-pro {
   color: var(--si-navy);
   background: var(--si-cyan);
-  padding: 2px 10px;
-  border-radius: 999px;
+  border-color: transparent;
 }
-.si-usage-bar {
-  height: 6px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  overflow: hidden;
-}
-.si-usage-fill {
-  height: 100%;
-  border-radius: 999px;
+.si-plan-upgrade {
+  margin-left: auto;
+  padding: 4px 12px;
+  font-family: var(--si-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--si-navy);
   background: var(--si-cyan);
-  transition: width 320ms ease;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: filter 150ms ease;
 }
-.si-usage-fill.is-low {
-  background: var(--si-danger);
+.si-plan-upgrade:hover {
+  filter: brightness(1.08);
 }
-.si-usage-note {
-  font-size: 10.5px;
-  color: var(--si-faint, #5a626b);
+.si-plan-list {
+  list-style: none;
+  margin: 0;
+  padding: 10px 0 0;
+  display: flex;
+  flex-direction: column;
+}
+.si-feat {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+.si-feat:first-child {
+  border-top: none;
+}
+.si-feat-ic {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+}
+.si-feat-label {
+  font-size: 12.5px;
+  color: var(--si-text);
+}
+.si-feat-help {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--si-faint);
+  cursor: help;
+  transition: color 150ms ease;
+}
+.si-feat-help:hover,
+.si-feat-help:focus-visible {
+  color: var(--si-cyan);
+  outline: none;
+}
+.si-feat-tip {
+  position: absolute;
+  bottom: calc(100% + 7px);
+  left: 50%;
+  transform: translateX(-50%) translateY(3px);
+  z-index: 60;
+  width: max-content;
+  max-width: 190px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  background: #10151f;
+  border: 1px solid var(--si-border);
+  box-shadow: 0 8px 22px -8px rgba(0, 0, 0, 0.8);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--si-text);
+  text-align: left;
+  white-space: normal;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 110ms ease,
+    transform 110ms ease;
+}
+/* Little arrow under the bubble. */
+.si-feat-tip::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: #10151f;
+}
+.si-feat-help:hover .si-feat-tip,
+.si-feat-help:focus-visible .si-feat-tip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+.si-feat-state {
+  margin-left: auto;
+  font-family: var(--si-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--si-muted);
+  white-space: nowrap;
+}
+/* Live features read in cyan; upcoming ones stay muted / dimmed. */
+.si-feat--active .si-feat-ic,
+.si-feat--usage .si-feat-ic {
+  color: var(--si-cyan);
+}
+.si-feat--active .si-feat-state {
+  color: var(--si-cyan);
+}
+.si-feat--locked .si-feat-ic {
+  color: var(--si-faint);
+}
+.si-feat--locked .si-feat-label {
+  color: var(--si-muted);
+}
+.si-feat--locked .si-feat-state {
+  color: var(--si-cyan);
+}
+.si-feat--upcoming {
+  opacity: 0.55;
+}
+.si-feat--upcoming .si-feat-ic {
+  color: var(--si-faint);
 }
 
 /* Config row (subtle) ----------------------------------------------------- */
@@ -229,29 +468,6 @@
   .si-refresh.is-syncing svg {
     animation: none;
   }
-}
-
-/* Stat -------------------------------------------------------------------- */
-.si-stat {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 14px 0 6px;
-}
-.si-stat-num {
-  font-family: var(--si-mono); /* Fira Code */
-  font-size: 56px;
-  font-weight: 650;
-  line-height: 1;
-  color: var(--si-cyan);
-  font-variant-numeric: tabular-nums;
-  text-shadow: 0 0 28px rgba(114, 255, 255, 0.25);
-}
-.si-stat-label {
-  font-size: 12px;
-  color: var(--si-muted);
-  letter-spacing: 0.01em;
 }
 
 /* Footer ------------------------------------------------------------------ */
@@ -677,4 +893,138 @@
 }
 .si-profile:hover .si-profile-go {
   color: var(--si-cyan);
+}
+
+/* Popup consent gate (blocking Terms & Privacy) */
+.si-consent-gate {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 2px 6px;
+  text-align: center;
+}
+.si-consent-hero {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  color: var(--si-cyan);
+  background: radial-gradient(
+    circle at 50% 38%,
+    rgba(114, 255, 255, 0.16),
+    rgba(114, 255, 255, 0.03)
+  );
+  border: 1px solid rgba(114, 255, 255, 0.22);
+  box-shadow:
+    0 0 30px -10px rgba(114, 255, 255, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+.si-consent-gate-title {
+  margin: 0;
+  font-family: var(--si-mono);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--si-text);
+}
+.si-consent-gate-text {
+  margin: 0;
+  max-width: 30ch;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--si-muted);
+}
+.si-consent-check {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  margin-top: 2px;
+  border: 1px solid var(--si-border);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.02);
+  cursor: pointer;
+  transition: border-color 150ms ease;
+}
+.si-consent-check:hover {
+  border-color: rgba(114, 255, 255, 0.28);
+}
+.si-consent-check input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.si-consent-box {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  border: 1.5px solid var(--si-faint);
+  color: var(--si-navy);
+  transition:
+    background 150ms ease,
+    border-color 150ms ease;
+}
+.si-consent-box svg {
+  opacity: 0;
+  transform: scale(0.6);
+  transition:
+    opacity 130ms ease,
+    transform 130ms ease;
+}
+.si-consent-check input:checked + .si-consent-box {
+  background: var(--si-cyan);
+  border-color: var(--si-cyan);
+}
+.si-consent-check input:checked + .si-consent-box svg {
+  opacity: 1;
+  transform: scale(1);
+}
+.si-consent-check input:focus-visible + .si-consent-box {
+  box-shadow: 0 0 0 3px rgba(114, 255, 255, 0.3);
+}
+.si-consent-check-text {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--si-muted);
+}
+.si-consent-check-text a {
+  color: var(--si-cyan);
+  text-decoration: none;
+  font-weight: 600;
+}
+.si-consent-check-text a:hover {
+  text-decoration: underline;
+}
+.si-consent-gate-btn {
+  width: 100%;
+  padding: 12px 16px;
+  font-family: var(--si-mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--si-navy, #052656);
+  background: var(--si-cyan);
+  border: none;
+  border-radius: 11px;
+  cursor: pointer;
+  transition:
+    filter 150ms ease,
+    opacity 150ms ease;
+}
+.si-consent-gate-btn:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+.si-consent-gate-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--si-muted);
 }

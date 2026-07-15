@@ -1,28 +1,118 @@
 import { useEffect, useState } from 'react';
-import { browser } from '#imports';
+import { browser, storage } from '#imports';
 import { Logo } from '@/components/Logo';
+import { TIERS_URL } from '@/lib/clerkConfig';
 import { getActiveBundle } from '@/lib/config';
+import { isConsentAccepted } from '@/lib/consent';
 import { entitlementItem, getActiveEntitlement } from '@/lib/entitlement';
-import { getAnonymizeStatus, type QuotaStatus } from '@/lib/quota';
+import { getAnonymizeStatus } from '@/lib/quota';
 import { blockedCountItem, isEnabled } from '@/settings';
 import './App.css';
 import { AccountSection } from './AccountSection';
+import { PopupConsent } from './PopupConsent';
+import { buildPlanView, type FeatureState, type PlanView } from './planFeatures';
 import { type ProtectionStatus, protectionStatus } from './protection';
 import { SessionLockSettings } from './SessionLockSettings';
 import { useCountUp } from './useCountUp';
 
-/** Anonymise & Paste allowance: "Unlimited" for Pro, "N / 10 left" for free. */
-function UsageMeter() {
-  const [status, setStatus] = useState<QuotaStatus | null>(null);
+function FeatureStateIcon({ state }: { state: FeatureState }) {
+  if (state === 'upcoming') {
+    return (
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="1.6" />
+        <path
+          d="M12 8v4.2l2.6 1.6"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  }
+  if (state === 'locked') {
+    return (
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" aria-hidden="true">
+        <rect x="5" y="10.5" width="14" height="9" rx="2" stroke="currentColor" strokeWidth="1.6" />
+        <path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" stroke="currentColor" strokeWidth="1.6" />
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" aria-hidden="true">
+      <circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="1.6" />
+      <path
+        d="M8.4 12.2l2.4 2.4 4.8-5"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function PlanChevron({ open }: { open: boolean }) {
+  return (
+    <svg
+      className={`si-plan-chev${open ? ' is-open' : ''}`}
+      viewBox="0 0 24 24"
+      width="14"
+      height="14"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="M9 6l6 6-6 6"
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function HelpIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.5" />
+      <path
+        d="M9.6 9.4a2.4 2.4 0 0 1 4.6.9c0 1.6-2.2 1.9-2.2 3.4"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+      <circle cx="12" cy="17" r="0.9" fill="currentColor" />
+    </svg>
+  );
+}
+
+/** Remembers whether the plan checklist is expanded (default: shown). */
+const planExpandedItem = storage.defineItem<boolean>('local:si_plan_expanded', { fallback: true });
+
+/** "Your plan" card: every feature with its per-plan state (Active / usage / Soon). */
+function PlanCard() {
+  const [view, setView] = useState<PlanView | null>(null);
+  const [open, setOpen] = useState(true);
+
+  useEffect(() => {
+    planExpandedItem.getValue().then(setOpen);
+  }, []);
+
+  const toggle = () => {
+    setOpen((prev) => {
+      const next = !prev;
+      planExpandedItem.setValue(next).catch(() => {});
+      return next;
+    });
+  };
+
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      // Reconcile the cached entitlement with the LIVE Clerk session before
-      // reading it. Without this a sign-out leaves a stale Pro blob behind and
-      // the meter keeps showing "Unlimited"; it also settles `signedIn` so we
-      // don't flip between the offline count and the backend count mid-render.
-      await browser.runtime.sendMessage({ type: 'si-refresh-entitlement' }).catch(() => {});
-      if (cancelled) return;
+
+    // Build the view from whatever entitlement is cached in local storage.
+    const compute = async () => {
       const [stored, ent] = await Promise.all([entitlementItem.getValue(), getActiveEntitlement()]);
       const snap = {
         plan: ent.plan,
@@ -31,43 +121,92 @@ function UsageMeter() {
         signedIn: stored !== null,
         businessDomain: ent.businessDomain,
       };
-      const s = await getAnonymizeStatus(snap);
-      if (!cancelled) setStatus(s);
-    })().catch(() => {});
+      const quota = await getAnonymizeStatus(snap);
+      if (!cancelled) setView(buildPlanView({ plan: ent.plan, pro: ent.pro, quota }));
+    };
+
+    // Paint immediately from the cached entitlement (a local read, instant)...
+    compute().catch(() => {});
+    // ...then reconcile with the LIVE Clerk session in the background — a
+    // sign-out otherwise leaves a stale Pro blob showing "Unlimited" — and
+    // repaint. This no longer blocks the first render (that round-trip is slow).
+    browser.runtime
+      .sendMessage({ type: 'si-refresh-entitlement' })
+      .then(() => {
+        if (!cancelled) return compute();
+      })
+      .catch(() => {});
+
     return () => {
       cancelled = true;
     };
   }, []);
 
-  if (!status) return null;
-
-  if (status.unlimited) {
+  if (!view) {
+    // Instant skeleton so the section never pops in from nothing.
     return (
-      <div className="si-usage">
-        <div className="si-usage-top">
-          <span className="si-usage-label">Anonymise &amp; Paste</span>
-          <span className="si-usage-pro">Unlimited</span>
+      <section className="si-plan si-plan--skeleton" aria-hidden="true">
+        <div className="si-plan-head">
+          <span className="si-plan-title">Your plan</span>
+          <span className="si-skel si-skel-tag" />
         </div>
-      </div>
+        <ul className="si-plan-list">
+          {[0, 1, 2, 3, 4].map((i) => (
+            <li key={i} className="si-feat">
+              <span className="si-skel si-skel-ic" />
+              <span className="si-skel si-skel-label" />
+              <span className="si-skel si-skel-state" />
+            </li>
+          ))}
+        </ul>
+      </section>
     );
   }
 
-  const pct = status.limit > 0 ? (status.remaining / status.limit) * 100 : 0;
-  const low = status.remaining <= 2;
   return (
-    <div className="si-usage">
-      <div className="si-usage-top">
-        <span className="si-usage-label">Anonymise &amp; Paste</span>
-        <span className="si-usage-count">
-          <strong>{status.remaining}</strong>
-          <span className="si-usage-of">/ {status.limit} left</span>
-        </span>
+    <section className="si-plan si-plan--in">
+      <div className="si-plan-head">
+        <button
+          type="button"
+          className="si-plan-toggle"
+          onClick={toggle}
+          aria-expanded={open}
+          aria-controls="si-plan-body"
+        >
+          <PlanChevron open={open} />
+          <span className="si-plan-title">Your plan</span>
+        </button>
+        <span className={`si-plan-tag${view.isPro ? ' is-pro' : ''}`}>{view.planLabel}</span>
+        {!view.isPro && (
+          <button
+            type="button"
+            className="si-plan-upgrade"
+            onClick={() => browser.tabs.create({ url: TIERS_URL }).catch(() => {})}
+          >
+            Upgrade
+          </button>
+        )}
       </div>
-      <div className="si-usage-bar">
-        <div className={`si-usage-fill${low ? ' is-low' : ''}`} style={{ width: `${pct}%` }} />
+      <div id="si-plan-body" className={`si-plan-body${open ? ' is-open' : ''}`}>
+        <ul className="si-plan-list">
+          {view.rows.map((r) => (
+            <li key={r.key} className={`si-feat si-feat--${r.state}`}>
+              <span className="si-feat-ic">
+                <FeatureStateIcon state={r.state} />
+              </span>
+              <span className="si-feat-label">{r.label}</span>
+              <button type="button" className="si-feat-help" aria-label={r.note}>
+                <HelpIcon />
+                <span className="si-feat-tip" role="tooltip">
+                  {r.note}
+                </span>
+              </button>
+              <span className="si-feat-state">{r.detail}</span>
+            </li>
+          ))}
+        </ul>
       </div>
-      <span className="si-usage-note">Resets monthly · unlimited on Pro</span>
-    </div>
+    </section>
   );
 }
 
@@ -85,16 +224,9 @@ function ArrowIcon() {
   );
 }
 
-function ShieldIcon({ checked }: { checked: boolean }) {
+function ShieldIcon({ checked, size = 20 }: { checked: boolean; size?: number }) {
   return (
-    <svg
-      className="si-protect-icon"
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-      width="20"
-      height="20"
-    >
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" width={size} height={size}>
       <path
         d="M12 3l7 3v5.5c0 4.3-2.9 7.4-7 8.8-4.1-1.4-7-4.5-7-8.8V6l7-3z"
         stroke="currentColor"
@@ -157,9 +289,11 @@ function App() {
   const [patternVersion, setPatternVersion] = useState<number | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [status, setStatus] = useState<ProtectionStatus>({ kind: 'inactive' });
+  const [needsConsent, setNeedsConsent] = useState<boolean | null>(null);
   const appVersion = browser.runtime.getManifest().version;
 
   useEffect(() => {
+    isConsentAccepted().then((ok) => setNeedsConsent(!ok));
     blockedCountItem.getValue().then(setCount);
     getActiveBundle().then((b) => setPatternVersion(b.version));
     const stop = blockedCountItem.watch((v) => setCount(v ?? 0));
@@ -186,6 +320,18 @@ function App() {
     }
   };
 
+  if (needsConsent === null) return null; // brief load — avoids flashing the UI
+  if (needsConsent) {
+    return (
+      <PopupConsent
+        onAccept={() => {
+          setNeedsConsent(false);
+          browser.runtime.sendMessage({ type: 'si-consent-accepted' }).catch(() => {});
+        }}
+      />
+    );
+  }
+
   return (
     <div className="si-pop">
       <header className="si-pop-header">
@@ -200,30 +346,28 @@ function App() {
 
       <AccountSection />
 
-      <div className={`si-protect si-protect--${status.kind}`}>
-        <ShieldIcon checked={status.kind === 'active'} />
-        <div className="si-protect-lines">
-          {status.kind === 'active' ? (
-            <>
-              <span className="si-protect-label">Protected</span>
-              <span className="si-protect-host" title={status.host}>
-                {status.host}
-              </span>
-            </>
-          ) : (
-            <span className="si-protect-label">
-              {status.kind === 'inactive' ? 'Not active on this page' : 'Protection paused'}
-            </span>
-          )}
+      <section className={`si-hero si-hero--${status.kind}`}>
+        <div className="si-hero-ring">
+          <ShieldIcon checked={status.kind === 'active'} size={30} />
         </div>
-      </div>
-
-      <section className="si-stat">
-        <div className="si-stat-num">{displayCount.toLocaleString()}</div>
-        <div className="si-stat-label">secrets intercepted</div>
+        <h2 className="si-hero-title">
+          {status.kind === 'active'
+            ? 'Protected'
+            : status.kind === 'paused'
+              ? 'Protection paused'
+              : 'Not active here'}
+        </h2>
+        {status.kind === 'active' && (
+          <span className="si-hero-host" title={status.host}>
+            {status.host}
+          </span>
+        )}
+        <div className="si-hero-metric">
+          <b>{displayCount.toLocaleString()}</b> secret{count === 1 ? '' : 's'} intercepted so far
+        </div>
       </section>
 
-      <UsageMeter />
+      <PlanCard />
 
       <SessionLockSettings />
 
@@ -249,7 +393,7 @@ function App() {
           title="Your text is analyzed on-device and never leaves the browser"
         >
           <LocalShieldIcon />
-          Evaluated locally
+          Zero retention
         </span>
         <a
           className="si-link"

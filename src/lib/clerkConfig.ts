@@ -19,4 +19,7 @@ export const WEB_APP_URL = import.meta.env.WXT_WEB_APP_URL ?? 'https://secureint
 /** The web account page where users sign in / manage their account + plan. */
 export const ACCOUNT_URL = `${WEB_APP_URL}/account.html`;
 
+/** Pricing / plans section on the web app — where "Buy Pro" / upgrade points. */
+export const TIERS_URL = `${WEB_APP_URL}/#tiers`;
+
 export const isClerkConfigured = () => CLERK_PUBLISHABLE_KEY.length > 0;

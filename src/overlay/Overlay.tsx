@@ -243,9 +243,26 @@ function GhostSummaryView({
 
         <div className="si-rule" />
 
+        <div className="si-feature">
+          <span className="si-feature-ic">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" aria-hidden="true">
+              <path
+                d="M5 20V10a7 7 0 0 1 14 0v10l-2.3-1.6L14.4 20 12 18.3 9.6 20 7.3 18.4 5 20z"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinejoin="round"
+              />
+              <circle cx="9.5" cy="10.8" r="1" fill="currentColor" />
+              <circle cx="14.5" cy="10.8" r="1" fill="currentColor" />
+            </svg>
+          </span>
+          <span className="si-feature-name">Ghost Log Sanitiser</span>
+          {!pro && <span className="si-feature-pro">Pro</span>}
+        </div>
+
         <p className="si-ghost-lead">
-          Ghost scanned a large paste and found {summary.total} sensitive{' '}
-          {summary.total === 1 ? 'item' : 'items'}:
+          Found {summary.total} sensitive {summary.total === 1 ? 'item' : 'items'} in this large
+          paste:
         </p>
         <ul className="si-ghost-counts">
           {summary.items.map((it) => (

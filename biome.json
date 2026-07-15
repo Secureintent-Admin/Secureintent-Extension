@@ -50,7 +50,7 @@
       }
     },
     {
-      "includes": ["src/entrypoints/popup/main.tsx"],
+      "includes": ["src/entrypoints/popup/main.tsx", "src/entrypoints/welcome/main.tsx"],
       "linter": {
         "rules": {
           "style": { "noNonNullAssertion": "off" }
