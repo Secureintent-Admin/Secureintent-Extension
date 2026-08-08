@@ -7,6 +7,7 @@ export { compilePatterns, type RawPattern } from './compile';
 export { GHOST_EXTRA_PATTERNS, GHOST_MIN_CHARS } from './ghost';
 export { locateInText, type SecretLocation } from './locate';
 export { redact } from './redact';
+export { assessRisk, type RiskAssessment, type RiskLevel } from './risk';
 export { type GhostSummary, sanitize, summarize } from './sanitize';
 export { TOKEN_RE, type TokenizeResult, tokenizeSecrets, type VaultEntry } from './tokenize';
 export type { Detection, SecretType } from './types';

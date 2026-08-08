@@ -415,12 +415,51 @@
   border-radius: 2px;
   box-shadow: 0 0 8px rgba(114, 255, 255, 0.45);
 }
+.si-sev-low {
+  background: var(--si-faint);
+  box-shadow: none;
+}
+.si-sev-medium {
+  background: #f6c85f;
+  box-shadow: 0 0 8px rgba(246, 200, 95, 0.4);
+}
+.si-sev-high {
+  background: #ff9f43;
+  box-shadow: 0 0 8px rgba(255, 159, 67, 0.4);
+}
+.si-sev-critical {
+  background: var(--si-danger);
+  box-shadow: 0 0 8px rgba(255, 107, 107, 0.45);
+}
 .si-finding-name {
   flex: 1;
   font-family: var(--si-mono);
   font-size: 13px;
   font-weight: 600;
   color: var(--si-text);
+}
+.si-risk {
+  padding: 2px 7px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-family: var(--si-mono);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.3;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.si-risk-low {
+  color: var(--si-muted);
+}
+.si-risk-medium {
+  color: #f6c85f;
+}
+.si-risk-high {
+  color: #ff9f43;
+}
+.si-risk-critical {
+  color: var(--si-danger);
 }
 .si-finding-meta {
   font-family: var(--si-mono);
@@ -456,6 +495,15 @@
   padding: 9px 12px;
   white-space: pre-wrap;
   word-break: break-all;
+}
+.si-risk-reason {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--si-muted);
+}
+.si-risk-reason strong {
+  color: var(--si-text);
 }
 
 .si-actions {

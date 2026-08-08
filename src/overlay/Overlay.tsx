@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Logo } from '@/components/Logo';
-import { type Detection, type GhostSummary, locateInText } from '@/lib/detection';
+import { assessRisk, type Detection, type GhostSummary, locateInText } from '@/lib/detection';
 
 export type OverlayAction = 'paste' | 'redact' | 'cancel' | 'sanitize' | 'upgrade' | 'rehydrate';
 
@@ -74,6 +74,7 @@ export function Overlay({
           {detections.map((d, i) => {
             const open = expanded === i;
             const loc = locateInText(text, d);
+            const risk = assessRisk(text, d);
             return (
               <li key={i} className="si-finding">
                 <button
@@ -82,8 +83,9 @@ export function Overlay({
                   aria-expanded={open}
                   onClick={() => setExpanded(open ? null : i)}
                 >
-                  <span className="si-sev" aria-hidden="true" />
+                  <span className={`si-sev si-sev-${risk.level}`} aria-hidden="true" />
                   <span className="si-finding-name">{d.label}</span>
+                  <span className={`si-risk si-risk-${risk.level}`}>{risk.level}</span>
                   <span className="si-finding-meta">
                     line {loc.line} · {d.match.length} chars
                   </span>
@@ -105,6 +107,9 @@ export function Overlay({
                 {open && (
                   <div className="si-finding-detail">
                     <code className="si-snippet">{loc.snippet}</code>
+                    <p className="si-risk-reason">
+                      <strong>Why:</strong> {risk.reasons.join('. ')}. Risk score {risk.score}/100.
+                    </p>
                   </div>
                 )}
               </li>
