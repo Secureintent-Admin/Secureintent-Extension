@@ -13,6 +13,9 @@ secrets into AI tools and other untrusted destinations. Detection runs entirely
   content on supported sites and blocks the paste if it contains a secret, showing a
   warning overlay rendered in a **closed Shadow DOM** (the host page can't read or
   tamper with it).
+- **Context-aware risk scoring.** Findings are ranked from low to critical using
+  their secret type and nearby text. Credential assignments raise confidence while
+  checksum or documentation context lowers noisy entropy matches. Scoring stays on-device.
 - **Three ways to resolve a warning:** paste anyway, cancel, or **paste anonymously**.
 - **Dehydrate ⇄ Rehydrate round-trip.** "Paste anonymously" replaces each secret with
   a reversible placeholder token (e.g. `⟦SI:a1b2c3d4⟧`) before it reaches the AI. When

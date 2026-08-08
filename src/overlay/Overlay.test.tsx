@@ -23,6 +23,28 @@ describe('Overlay', () => {
     expect(screen.getByRole('alertdialog', { name: /ChatGPT/ })).toBeTruthy();
   });
 
+  test('shows context-aware risk and explains it without exposing the secret', () => {
+    const contextual = `API_SECRET=${secret}`;
+    const at = contextual.indexOf(secret);
+    const dets: Detection[] = [
+      {
+        type: 'known-key',
+        label: 'OpenAI API key',
+        match: secret,
+        start: at,
+        end: at + secret.length,
+      },
+    ];
+    const { container } = render(
+      <Overlay site="ChatGPT" text={contextual} detections={dets} onAction={() => {}} />,
+    );
+
+    expect(screen.getByText('high')).toBeTruthy();
+    fireEvent.click(screen.getByText('OpenAI API key'));
+    expect(screen.getByText(/nearby text identifies it as a credential/i)).toBeTruthy();
+    expect(container.textContent).not.toContain(secret);
+  });
+
   test('never renders the raw secret', () => {
     const { container } = renderOverlay();
     expect(container.textContent).not.toContain(secret);
