@@ -61,6 +61,22 @@ pnpm zip            # packaged zip for store submission
 pnpm compile        # type-check (tsc --noEmit)
 pnpm test           # unit tests (Vitest)
 pnpm coverage       # unit tests with coverage
+pnpm e2e            # end-to-end suite (Playwright, real Chromium)
+pnpm lint           # Biome lint; `pnpm check` also checks formatting
+pnpm semgrep        # custom static-analysis rules in semgrep/
+```
+
+`pnpm semgrep` needs Semgrep itself, which is a Python tool rather than a
+dependency of this project:
+
+```bash
+brew install semgrep     # or: pipx install semgrep
+```
+
+The first `pnpm e2e` run also needs the browser Playwright drives:
+
+```bash
+pnpm exec playwright install chromium
 ```
 
 ## Project layout
