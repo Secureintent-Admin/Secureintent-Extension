@@ -16,6 +16,16 @@ import { type BrowserContext, chromium, expect, test } from '@playwright/test';
  * below — so nothing here can reach the production API or database.
  */
 
+/**
+ * The extension's own global. These callbacks are stringified and run inside the
+ * service worker, not in this file, so the e2e project has no ambient extension
+ * types — declare only the two calls used below.
+ */
+declare const chrome: {
+  storage: { local: { get(keys: string[]): Promise<Record<string, unknown>> } };
+  runtime: { setUninstallURL(url: string): Promise<void> };
+};
+
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 const EXT = path.resolve(dirname, '../dist/chrome-mv3');
 const PORT = 8788; // must match WXT_API_BASE in the e2e:install script
