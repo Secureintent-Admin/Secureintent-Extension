@@ -55,6 +55,9 @@ pnpm lint           # biome lint
 pnpm check          # biome check (lint + format); check:fix to auto-fix
 pnpm format         # biome format --write
 pnpm semgrep        # run custom Semgrep rules (semgrep/), fail on findings
+                    #   needs `brew install semgrep` — it is a Python tool, not a dependency
+                    #   here, so a clean checkout has the script but not the binary. Same for
+                    #   Playwright's browsers: `pnpm exec playwright install chromium`.
 pnpm test           # vitest run (unit tests, colocated *.test.ts)
 pnpm test:watch     # vitest watch
 pnpm coverage       # vitest run --coverage
