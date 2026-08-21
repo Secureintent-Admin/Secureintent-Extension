@@ -1,10 +1,12 @@
-import type { SecretType } from './types';
+import type { PatternOrigin, SecretType } from './types';
 
 export interface Pattern {
   type: SecretType;
   label: string;
   regex: RegExp; // global-flagged; the whole match (m[0]) is the secret
   validate?: string; // optional post-match validator name (see validators.ts)
+  /** Only a team's own patterns carry this ('team'); the catalogue below omits it. */
+  origin?: PatternOrigin;
 }
 
 // higher rank wins when two detections overlap

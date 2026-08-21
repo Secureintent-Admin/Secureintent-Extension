@@ -1,8 +1,12 @@
 /** Mirrors the Worker's signed entitlement blob (backend lib/entitlementSign.ts). */
 export interface SignedEntitlement {
   clerkUserId: string;
+  // Optional for backward-compat with blobs cached before the Worker added it.
+  email?: string | null;
   plan: 'developer' | 'developer_pro' | 'business_pro';
-  source: 'manual' | 'paddle' | 'business_email' | 'none';
+  source: 'manual' | 'lifetime' | 'org_seat' | 'paddle' | 'business_email' | 'none';
+  /** The team this seat belongs to, when the plan came from an org subscription. */
+  org?: { id: string; name: string | null; role: string | null } | null;
   pro: boolean;
   features: string[];
   status: string | null;
@@ -29,6 +33,8 @@ export interface ActiveEntitlement {
   features: string[];
   source: SignedEntitlement['source'];
   businessDomain: string | null;
+  email: string | null;
+  org: { id: string; name: string | null; role: string | null } | null;
 }
 
 export const FREE_ENTITLEMENT: ActiveEntitlement = {
@@ -37,6 +43,8 @@ export const FREE_ENTITLEMENT: ActiveEntitlement = {
   features: [],
   source: 'none',
   businessDomain: null,
+  email: null,
+  org: null,
 };
 
 /** Pro feature keys — must match the Worker's PRO_FEATURES. */

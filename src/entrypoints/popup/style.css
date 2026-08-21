@@ -10,12 +10,36 @@
   box-sizing: border-box;
 }
 
+/* Chrome sizes the popup from the DOCUMENT, not from <body>. With a width only
+   on body, anything wider than 380px — Clerk's sign-in card is ~400px — widened
+   the window while body kept painting 380px, leaving an unpainted strip down the
+   right. Pin the width and the background on <html> too, and clamp the overflow
+   so no injected third-party UI can stretch the window again. */
+html {
+  width: 380px;
+  overflow-x: hidden;
+  background: #050505;
+}
+
 body {
   margin: 0;
   width: 380px;
+  max-width: 100%;
+  overflow-x: hidden;
   background: #050505;
 }
 
 #root {
   width: 100%;
+}
+
+/* Clerk renders its own DOM inside the popup and sizes it for a full page.
+   Let it fill our width instead of dictating it. */
+.cl-rootBox,
+.cl-card,
+.cl-cardBox,
+.cl-modalContent {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
 }

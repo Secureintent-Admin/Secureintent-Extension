@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import type { BrowserContext } from '@playwright/test';
 import { expect, test } from './fixtures';
 
-// Deterministic e2e for the Cloud Console Session Lock. Seeds a known PIN hash +
+// Deterministic e2e for Session Lock (the cloud-console PIN gate). Seeds a known PIN hash +
 // a sub-second timeout, serves a fake AWS console, and drives the lock/unlock.
 // REQUIRES the e2e build (WXT_E2E=1) so the shadow root is open. No login.
 

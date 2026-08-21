@@ -7,8 +7,10 @@ vi.mock('@/lib/config/verify', () => ({
 }));
 
 import {
+  canManageTeam,
   evaluateBlob,
   evaluateStored,
+  FREE_ENTITLEMENT,
   getActiveEntitlement,
   hasFeatureCached,
   initEntitlementCache,
@@ -41,7 +43,12 @@ describe('evaluateBlob', () => {
       features: ['rehydrate', 'ghost', 'session_lock'],
       source: 'paddle',
       businessDomain: null,
+      email: null,
+      org: null,
     });
+  });
+  test('carries the account email through for display', () => {
+    expect(evaluateBlob(proBlob({ email: 'dev@acme.com' }), 1500, true).email).toBe('dev@acme.com');
   });
   test('invalid signature → free', () => {
     expect(evaluateBlob(proBlob(), 1500, false)).toEqual({
@@ -50,6 +57,8 @@ describe('evaluateBlob', () => {
       features: [],
       source: 'none',
       businessDomain: null,
+      email: null,
+      org: null,
     });
   });
   test('expired → free even if signature valid', () => {
@@ -59,6 +68,8 @@ describe('evaluateBlob', () => {
       features: [],
       source: 'none',
       businessDomain: null,
+      email: null,
+      org: null,
     });
   });
   test('bound to a different user → free (blob is not portable)', () => {
@@ -83,6 +94,8 @@ describe('evaluateStored', () => {
       features: [],
       source: 'none',
       businessDomain: null,
+      email: null,
+      org: null,
     });
   });
   test('valid signature unlocks', async () => {
@@ -112,5 +125,25 @@ describe('getActiveEntitlement', () => {
   test('reads from storage', async () => {
     await entitlementItem.setValue({ blob: proBlob({ exp: 9_999_999_999 }), signature: 'valid' });
     expect((await getActiveEntitlement()).pro).toBe(true);
+  });
+});
+
+describe('canManageTeam', () => {
+  const withOrg = (role: string | null) => ({
+    ...FREE_ENTITLEMENT,
+    org: { id: 'org_1', name: 'Optimizely', role },
+  });
+
+  test('is true for an org admin', () => {
+    expect(canManageTeam(withOrg('org:admin'))).toBe(true);
+  });
+
+  test('is false for a member — they have nothing to manage', () => {
+    expect(canManageTeam(withOrg('org:member'))).toBe(false);
+  });
+
+  test('is false when the role is unknown or the user has no team', () => {
+    expect(canManageTeam(withOrg(null))).toBe(false);
+    expect(canManageTeam(FREE_ENTITLEMENT)).toBe(false);
   });
 });

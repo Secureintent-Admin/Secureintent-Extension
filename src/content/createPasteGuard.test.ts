@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
-import { DEFAULT_BUNDLE, saveBundle } from '@/lib/config';
+import { type BundlePolicy, DEFAULT_BUNDLE, saveBundle } from '@/lib/config';
 import { acceptTerms, consentItem } from '@/lib/consent';
 import type { OverlayAction } from '@/overlay/Overlay';
 import * as telemetryService from '@/services/telemetryService';
@@ -17,7 +17,7 @@ vi.mock('../overlay/mountConsentGate', () => ({ mountConsentGate: mountConsentGa
 
 // Mock the entitlement gate. Default: pro unlocked (existing behavior tests).
 // proRef.value → ghost gating (hasFeatureCached). anonRef.value → anonymise
-// allowance (canAnonymize): true = Pro or free quota left, false = quota exhausted.
+// allowance: true = free quota left, false = quota exhausted (0 of 10 remaining).
 const { proRef, anonRef } = vi.hoisted(() => ({
   proRef: { value: true },
   anonRef: { value: true },
@@ -34,8 +34,13 @@ vi.mock('@/lib/entitlement', () => ({
   })),
 }));
 vi.mock('@/lib/quota', () => ({
-  canAnonymize: vi.fn(async () => anonRef.value),
+  getAnonymizeStatus: vi.fn(async () =>
+    anonRef.value
+      ? { used: 1, remaining: 9, limit: 10, unlimited: false }
+      : { used: 10, remaining: 0, limit: 10, unlimited: false },
+  ),
   consumeAnonymize: vi.fn(async () => anonRef.value),
+  formatQuotaReset: vi.fn(() => 'Sep 1'),
 }));
 
 const SECRET = 'sk-' + 'a'.repeat(30);
@@ -282,6 +287,19 @@ describe('createPasteGuard', () => {
     expect(calls.every((c) => !/⟦SI:[0-9a-f]{8}⟧/.test(String(c[2])))).toBe(true);
   });
 
+  test('exhausted quota tells the overlay the allowance is spent, with its reset date', async () => {
+    proRef.value = false;
+    anonRef.value = false; // 0 of 10 left
+    const t = setup();
+    await t.start();
+    await t.firePaste(t.makeEvent(`x ${SECRET} y`));
+
+    expect(mountOverlayMock.mock.calls[0][1].quotaExhausted).toEqual({
+      limit: 10,
+      resetsOn: 'Sep 1',
+    });
+  });
+
   test('free user with quota left: overlay pro=true and "redact" anonymises', async () => {
     proRef.value = false; // no ghost feature
     anonRef.value = true; // free monthly quota available
@@ -289,9 +307,27 @@ describe('createPasteGuard', () => {
     await t.start();
     await t.firePaste(t.makeEvent(`x ${SECRET} y`));
     expect(mountOverlayMock.mock.calls[0][1].pro).toBe(true);
+    // Allowance remaining → no "you're out" messaging.
+    expect(mountOverlayMock.mock.calls[0][1].quotaExhausted).toBeUndefined();
     lastOnAction()('redact');
     const inserted = (document.execCommand as ReturnType<typeof vi.fn>).mock.calls.at(-1)![2];
     expect(inserted).toMatch(/⟦SI:[0-9a-f]{8}⟧/);
+  });
+
+  test('"upgrade" action asks the background for the account page, not the tiers page', async () => {
+    const sendMessage = vi.spyOn(fakeBrowser.runtime, 'sendMessage').mockResolvedValue(undefined);
+    proRef.value = false;
+    anonRef.value = false;
+    const t = setup();
+    await t.start();
+    await t.firePaste(t.makeEvent(`x ${SECRET} y`));
+
+    lastOnAction()('upgrade');
+    expect(sendMessage).toHaveBeenCalledWith({ type: 'si-open-upgrade' });
+    // Nothing is inserted: an upgrade click is not a paste.
+    const calls = (document.execCommand as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls.every((c) => !String(c[2]).includes(SECRET))).toBe(true);
+    sendMessage.mockRestore();
   });
 
   test('"redact" action inserts reversible SI tokens in place of the secret', async () => {
@@ -349,6 +385,27 @@ describe('createPasteGuard', () => {
 
     await t.firePaste(t.makeEvent(`const key = "${token}";`));
     lastOnAction()('cancel');
+    expect((document.execCommand as ReturnType<typeof vi.fn>).mock.calls.length).toBe(
+      insertsBefore,
+    );
+  });
+
+  test('rehydrate: free user (no rehydrate feature) is not offered restore', async () => {
+    const t = setup();
+    await t.start();
+    const token = await dehydrateToken(t); // dehydrate while allowed
+
+    proRef.value = false; // free: the `rehydrate` feature is locked
+    const overlaysBefore = mountOverlayMock.mock.calls.length;
+    const insertsBefore = (document.execCommand as ReturnType<typeof vi.fn>).mock.calls.length;
+
+    const e = t.makeEvent(`const key = "${token}";`);
+    await t.firePaste(e);
+
+    // No rehydrate prompt and the paste isn't intercepted — the tokens fall through
+    // to a normal browser paste; the secret is never restored for a free user.
+    expect(mountOverlayMock.mock.calls.length).toBe(overlaysBefore);
+    expect(e.preventDefault).not.toHaveBeenCalled();
     expect((document.execCommand as ReturnType<typeof vi.fn>).mock.calls.length).toBe(
       insertsBefore,
     );
@@ -558,6 +615,293 @@ describe('createPasteGuard', () => {
 
     // Fail-open: execCommand must have been called to re-insert the original text
     expect(document.execCommand).toHaveBeenCalledWith('insertText', false, text);
+  });
+});
+
+describe('createPasteGuard — team policy', () => {
+  beforeEach(async () => {
+    fakeBrowser.reset();
+    await acceptTerms();
+    proRef.value = true;
+    anonRef.value = true;
+    mountOverlayMock.mockReset();
+    mountOverlayMock.mockResolvedValue({ remove: vi.fn() });
+    mountConsentGateMock.mockReset();
+    mountConsentGateMock.mockResolvedValue({ remove: vi.fn() });
+    document.execCommand = vi.fn(() => true);
+    sendTelemetrySpy.mockClear();
+    (window as unknown as Record<string, boolean>).__secureintentDedicated__ = false;
+  });
+  afterEach(() => document.body.replaceChildren());
+
+  // Only a signature-verified bundle is ever persisted (see configService), so
+  // seeding the active bundle is exactly "the team pushed this policy".
+  const savePolicy = (over: Partial<BundlePolicy>) =>
+    saveBundle({
+      ...DEFAULT_BUNDLE,
+      policy: {
+        blockInsteadOfWarn: false,
+        requireSessionLock: false,
+        extraPatterns: [],
+        blockedSites: [],
+        ...over,
+      },
+    });
+
+  const lastProps = () => mountOverlayMock.mock.calls.at(-1)![1];
+  const inserts = () => (document.execCommand as ReturnType<typeof vi.fn>).mock.calls;
+
+  test('regression: a bundle with NO policy behaves exactly as before', async () => {
+    const t = setup();
+    await t.start();
+    const e = t.makeEvent(`x ${SECRET} y`);
+    await t.firePaste(e);
+
+    expect(e.preventDefault).toHaveBeenCalled();
+    expect(lastProps().policyBlock).toBeUndefined();
+    expect(lastProps().blockRawPaste).toBe(false);
+
+    lastOnAction()('paste'); // "Paste anyway" still inserts the original text
+    expect(document.execCommand).toHaveBeenCalledWith('insertText', false, `x ${SECRET} y`);
+  });
+
+  describe('blockInsteadOfWarn', () => {
+    test('the overlay is told not to offer "Paste anyway"', async () => {
+      await savePolicy({ blockInsteadOfWarn: true });
+      const t = setup();
+      await t.start();
+      await t.firePaste(t.makeEvent(`x ${SECRET} y`));
+
+      expect(mountOverlayMock).toHaveBeenCalledTimes(1);
+      expect(lastProps().blockRawPaste).toBe(true);
+    });
+
+    test('a "paste" outcome inserts nothing — the warning is a block', async () => {
+      await savePolicy({ blockInsteadOfWarn: true });
+      const t = setup();
+      await t.start();
+      await t.firePaste(t.makeEvent(`x ${SECRET} y`));
+
+      lastOnAction()('paste');
+      expect(document.execCommand).not.toHaveBeenCalled();
+    });
+
+    test('a refused paste is reported as cancelled, never as paste_anyway', async () => {
+      await savePolicy({ blockInsteadOfWarn: true });
+      const t = setup();
+      await t.start();
+      await t.firePaste(t.makeEvent(`x ${SECRET} y`));
+
+      lastOnAction()('paste');
+      const event = await vi.waitFor(() => {
+        const call = sendTelemetrySpy.mock.calls.at(-1);
+        expect(call).toBeTruthy();
+        return call![0];
+      });
+      expect(event.action).toBe('cancelled');
+    });
+
+    test('the anonymise path stays available', async () => {
+      await savePolicy({ blockInsteadOfWarn: true });
+      const t = setup();
+      await t.start();
+      await t.firePaste(t.makeEvent(`x ${SECRET} y`));
+
+      lastOnAction()('redact');
+      const inserted = inserts().at(-1)![2];
+      expect(inserted).not.toContain(SECRET);
+      expect(inserted).toMatch(/⟦SI:[0-9a-f]{8}⟧/);
+    });
+
+    test('an overlay failure drops the paste instead of re-inserting the raw text', async () => {
+      // Fail-open must not become the leak the policy exists to prevent: the
+      // page keeps working, only this paste is dropped.
+      await savePolicy({ blockInsteadOfWarn: true });
+      mountOverlayMock.mockRejectedValueOnce(new Error('mount boom'));
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      const t = setup();
+      await t.start();
+      const e = t.makeEvent(`x ${SECRET} y`);
+      await t.firePaste(e);
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(e.preventDefault).toHaveBeenCalled();
+      expect(document.execCommand).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('blockedSites', () => {
+    test('a paste with a detection is blocked outright with a policy notice', async () => {
+      await savePolicy({ blockedSites: [location.hostname] });
+      const t = setup();
+      await t.start();
+      const e = t.makeEvent(`x ${SECRET} y`);
+      await t.firePaste(e);
+
+      expect(e.preventDefault).toHaveBeenCalled();
+      expect(lastProps().policyBlock).toEqual({ host: location.hostname });
+
+      // No outcome inserts anything here — not even the (absent) paste action.
+      lastOnAction()('paste');
+      lastOnAction()('cancel');
+      expect(document.execCommand).not.toHaveBeenCalled();
+    });
+
+    test('a large (Ghost) paste is blocked too, with no sanitize escape hatch', async () => {
+      await savePolicy({ blockedSites: [location.hostname] });
+      const t = setup();
+      await t.start();
+      const filler = 'application log line number forty-two here '.repeat(60);
+      await t.firePaste(t.makeEvent(`${filler} host 10.0.0.5 contacted ops@corp.com ${filler}`));
+
+      // The block notice replaces the Ghost summary — no paste, no sanitize.
+      expect(lastProps().policyBlock).toEqual({ host: location.hostname });
+      lastOnAction()('sanitize');
+      lastOnAction()('paste');
+      expect(document.execCommand).not.toHaveBeenCalled();
+    });
+
+    // The rule is about the SITE, not the secret. The console tells the admin
+    // "the extension refuses every paste, whether or not it finds a secret", so
+    // a clean paste has to be stopped too — otherwise the rule quietly means
+    // something narrower than what they were sold.
+    test('a clean paste is refused too — the rule is about the destination', async () => {
+      await savePolicy({ blockedSites: [location.hostname] });
+      const t = setup();
+      await t.start();
+      const e = t.makeEvent('just a normal message');
+      await t.firePaste(e);
+
+      expect(e.preventDefault).toHaveBeenCalled();
+      expect(lastProps().policyBlock).toEqual({ host: location.hostname });
+      expect(document.execCommand).not.toHaveBeenCalled();
+    });
+
+    test('and reports nothing, because no secret was found to report', async () => {
+      await savePolicy({ blockedSites: [location.hostname] });
+      sendTelemetrySpy.mockClear();
+      const t = setup();
+      await t.start();
+      await t.firePaste(t.makeEvent('just a normal message'));
+      await Promise.resolve();
+
+      expect(sendTelemetrySpy).not.toHaveBeenCalled();
+    });
+
+    test('a host that is NOT on the list gets the ordinary warning', async () => {
+      await savePolicy({ blockedSites: ['pastebin.com'] });
+      const t = setup();
+      await t.start();
+      await t.firePaste(t.makeEvent(`x ${SECRET} y`));
+
+      expect(lastProps().policyBlock).toBeUndefined();
+      lastOnAction()('paste');
+      expect(document.execCommand).toHaveBeenCalledWith('insertText', false, `x ${SECRET} y`);
+    });
+
+    test('rehydrate is not offered on a blocked host (it would restore a secret)', async () => {
+      // Dehydrate on an unblocked page first, then re-run the guard under the block.
+      const t = setup();
+      await t.start();
+      await t.firePaste(t.makeEvent(`x ${SECRET} y`));
+      lastOnAction()('redact');
+      const token = inserts()
+        .at(-1)![2]
+        .match(/⟦SI:[0-9a-f]{8}⟧/)![0];
+
+      await savePolicy({ blockedSites: [location.hostname] });
+      const t2 = setup();
+      await t2.start();
+      mountOverlayMock.mockClear();
+      (document.execCommand as ReturnType<typeof vi.fn>).mockClear();
+
+      const e = t2.makeEvent(`const key = "${token}";`);
+      await t2.firePaste(e);
+
+      // The blocked destination stops it like any other paste, and crucially the
+      // real secret is never restored — the token stays inert.
+      expect(e.preventDefault).toHaveBeenCalled();
+      expect(lastProps().policyBlock).toEqual({ host: location.hostname });
+      expect(document.execCommand).not.toHaveBeenCalled();
+    });
+  });
+});
+
+/**
+ * A team admin's own patterns ride in on the same signed bundle and run through
+ * the same detection path as ours. These pin the whole plumb: bundle → compile →
+ * detect → the props the warning overlay is handed.
+ */
+describe('createPasteGuard — team patterns (origin)', () => {
+  beforeEach(async () => {
+    fakeBrowser.reset();
+    await acceptTerms();
+    proRef.value = true;
+    anonRef.value = true;
+    mountOverlayMock.mockReset();
+    mountOverlayMock.mockResolvedValue({ remove: vi.fn() });
+    mountConsentGateMock.mockReset();
+    mountConsentGateMock.mockResolvedValue({ remove: vi.fn() });
+    document.execCommand = vi.fn(() => true);
+    sendTelemetrySpy.mockClear();
+    (window as unknown as Record<string, boolean>).__secureintentDedicated__ = false;
+  });
+  afterEach(() => document.body.replaceChildren());
+
+  const TEAM_SECRET = 'ACME-4F2K9Z7Q1B3D';
+  // Exactly what /v1/config serves a team member: the catalogue plus their own
+  // patterns, and only the team's carry `origin`.
+  const saveTeamPatterns = () =>
+    saveBundle({
+      ...DEFAULT_BUNDLE,
+      patterns: [
+        ...DEFAULT_BUNDLE.patterns,
+        {
+          type: 'known-key',
+          label: 'Acme internal token',
+          regex: 'ACME-[A-Z0-9]{12}',
+          origin: 'team',
+        },
+      ],
+    });
+
+  const lastProps = () => mountOverlayMock.mock.calls.at(-1)![1];
+
+  test("a team pattern blocks the paste and the finding is marked 'team'", async () => {
+    await saveTeamPatterns();
+    const t = setup();
+    await t.start();
+    const e = t.makeEvent(`deploy ${TEAM_SECRET} now`);
+    await t.firePaste(e);
+
+    expect(e.preventDefault).toHaveBeenCalled();
+    expect(lastProps().detections).toHaveLength(1);
+    expect(lastProps().detections[0]).toMatchObject({
+      label: 'Acme internal token',
+      origin: 'team',
+    });
+  });
+
+  test('the default catalogue still detects alongside it, with no origin', async () => {
+    await saveTeamPatterns();
+    const t = setup();
+    await t.start();
+    await t.firePaste(t.makeEvent(`x ${SECRET} y and ${TEAM_SECRET} z`));
+
+    const dets = lastProps().detections;
+    expect(dets).toHaveLength(2);
+    expect(dets.map((d: { origin?: string }) => d.origin)).toEqual([undefined, 'team']);
+  });
+
+  test('regression: with no team patterns the overlay sees findings with no origin', async () => {
+    const t = setup();
+    await t.start();
+    await t.firePaste(t.makeEvent(`x ${SECRET} y`));
+
+    const dets = lastProps().detections;
+    expect(dets).toHaveLength(1);
+    expect('origin' in dets[0]).toBe(false);
   });
 });
 

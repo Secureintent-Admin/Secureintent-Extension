@@ -120,6 +120,353 @@ body {
   line-height: 1.6;
   color: var(--si-muted);
 }
+/* ── Activation guide ──────────────────────────────────────────────────────
+   Each step carries a small scene: a drawing of the exact interface it names.
+   Step 2 is the one that matters, so it shows the real interception. */
+.w-card--guide {
+  max-width: 560px;
+}
+.w-steps {
+  margin: 2px 0 20px;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+.w-step {
+  display: grid;
+  grid-template-columns: 190px 1fr;
+  gap: 20px;
+  align-items: center;
+  padding: 20px 0;
+  border-top: 1px solid var(--si-border);
+}
+.w-step-b {
+  min-width: 0;
+}
+.w-step-n {
+  display: block;
+  margin-bottom: 6px;
+  font-family: var(--si-mono);
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--si-cyan);
+}
+.w-step-t {
+  margin: 0 0 5px;
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  color: #fff;
+}
+.w-step-d {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--si-muted);
+}
+
+/* The scene frame: a dark inset panel so each drawing reads as a screen. */
+.w-scene {
+  position: relative;
+  height: 116px;
+  padding: 10px;
+  border: 1px solid var(--si-border);
+  border-radius: 13px;
+  background:
+    radial-gradient(120% 80% at 50% 0%, rgba(114, 255, 255, 0.07), transparent 70%),
+    rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+}
+
+/* Step 1 — browser toolbar and the extensions menu. */
+.w-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 7px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.05);
+}
+.w-dots {
+  display: flex;
+  gap: 3px;
+}
+.w-dots i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+}
+.w-omni {
+  flex: 1;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+.w-puzzle {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  color: var(--si-muted);
+  background: rgba(255, 255, 255, 0.07);
+}
+.w-menu {
+  margin: 9px 0 0 auto;
+  width: 132px;
+  padding: 6px;
+  border: 1px solid var(--si-border);
+  border-radius: 9px;
+  background: #0b0e12;
+  box-shadow: 0 14px 26px -14px rgba(0, 0, 0, 0.9);
+}
+.w-menu-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 6px;
+  border-radius: 6px;
+}
+.w-menu-row:first-child {
+  background: rgba(114, 255, 255, 0.08);
+}
+.w-menu-mark {
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  color: #fff;
+}
+.w-menu-name {
+  flex: 1;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--si-text);
+}
+.w-menu-pin {
+  color: var(--si-cyan);
+  animation: w-pin 2.4s ease-in-out infinite;
+}
+.w-menu-row--ghost .w-menu-mark {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+}
+.w-menu-bar {
+  flex: 1;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+/* Step 2 — composer underneath, warning card over it. */
+.w-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 7px 10px 8px;
+  border: 1px solid var(--si-border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+}
+.w-composer-label {
+  font-size: 9px;
+  line-height: 1.2;
+  color: var(--si-faint);
+}
+.w-composer-key {
+  font-family: var(--si-mono);
+  font-size: 9.5px;
+  line-height: 1.2;
+  color: rgba(244, 246, 248, 0.5);
+  letter-spacing: -0.03em;
+}
+.w-warn {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border: 1px solid rgba(114, 255, 255, 0.35);
+  border-radius: 10px;
+  background: linear-gradient(180deg, #11171e, #0a0d11);
+  box-shadow: 0 18px 34px -16px rgba(0, 0, 0, 0.95);
+  animation: w-intercept 520ms cubic-bezier(0.22, 1, 0.36, 1) 340ms both;
+}
+.w-warn-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.w-warn-icon {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  color: var(--si-cyan);
+  background: rgba(114, 255, 255, 0.1);
+  border: 1px solid rgba(114, 255, 255, 0.22);
+}
+.w-warn-title {
+  font-size: 10.5px;
+  font-weight: 650;
+  color: #fff;
+  white-space: nowrap;
+}
+.w-warn-actions {
+  display: flex;
+  gap: 4px;
+}
+.w-pill {
+  flex: 1;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+}
+.w-pill--on {
+  background: var(--si-cyan);
+}
+
+/* Step 3 — the tools themselves, each one a way in. */
+.w-scene--cover {
+  display: grid;
+  place-items: center;
+}
+.w-marks {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 7px;
+  position: relative;
+  z-index: 1;
+}
+.w-mark {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--si-border);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--si-muted);
+  text-decoration: none;
+  transition:
+    color 140ms ease,
+    border-color 140ms ease,
+    transform 140ms ease;
+}
+a.w-mark:hover {
+  color: var(--si-cyan);
+  border-color: rgba(114, 255, 255, 0.45);
+  transform: translateY(-1px);
+}
+a.w-mark:focus-visible {
+  outline: 2px solid rgba(114, 255, 255, 0.6);
+  outline-offset: 2px;
+}
+.w-mark--rest {
+  font-family: var(--si-mono);
+  font-size: 11px;
+  color: var(--si-faint);
+  border-style: dashed;
+}
+/* Visible to screen readers only. */
+.w-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* The sample key the user copies (step 2 body). */
+.w-key {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 10px;
+  padding: 7px 7px 7px 11px;
+  border: 1px solid var(--si-border);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.35);
+}
+.w-key code {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  font-family: var(--si-mono);
+  font-size: 11.5px;
+  color: var(--si-cyan);
+  white-space: nowrap;
+}
+.w-copy {
+  flex: 0 0 auto;
+  padding: 5px 11px;
+  border: 1px solid var(--si-border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--si-text);
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    border-color 140ms ease,
+    color 140ms ease;
+}
+.w-copy:hover {
+  border-color: rgba(114, 255, 255, 0.45);
+  color: var(--si-cyan);
+}
+.w-copy:focus-visible {
+  outline: 2px solid rgba(114, 255, 255, 0.6);
+  outline-offset: 2px;
+}
+
+@keyframes w-pin {
+  0%,
+  70%,
+  100% {
+    transform: translateY(0);
+  }
+  80% {
+    transform: translateY(-2.5px);
+  }
+}
+@keyframes w-intercept {
+  from {
+    opacity: 0;
+    transform: translateY(9px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes w-sweep {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(350%);
+  }
+}
+
+/* Stack the scene above the copy on narrow windows. */
+@media (max-width: 520px) {
+  .w-step {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+}
+
 .w-consent {
   display: flex;
   align-items: center;
@@ -290,8 +637,18 @@ body {
 }
 @media (prefers-reduced-motion: reduce) {
   .w-enter,
-  .w-hero--ok {
+  .w-hero--ok,
+  .w-menu-pin,
+  .w-sweep {
     animation: none;
+  }
+  /* The warning still appears, it just stops animating in. */
+  .w-warn {
+    animation: none;
+    opacity: 1;
+  }
+  .w-sweep {
+    display: none;
   }
   .w-cta,
   .w-consent-box,

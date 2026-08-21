@@ -5,7 +5,7 @@ import { getOrCreateSalt, type KeyValueStore } from '@/lib/fingerprint';
 import { verifyPin } from '@/lib/lock';
 import { type LockWarningHandle, mountLockWarning } from '@/overlay/mountLockWarning';
 import { mountSessionLock, type SessionLockHandle } from '@/overlay/mountSessionLock';
-import { getSessionLockConfig } from '@/settings';
+import { getSessionLockConfig, isSessionLockEnforced } from '@/settings';
 
 const browserStore: KeyValueStore = {
   get: async (key) => (await storage.getItem<string>(`local:${key}`)) ?? undefined,
@@ -18,13 +18,17 @@ const LOCKED_FLAG = 'si_session_locked';
 const ACTIVITY_EVENTS = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'] as const;
 
 /**
- * Cloud Console Session Lock. After inactivity (or on tab-away), covers a
+ * Session Lock. After inactivity (or on tab-away), covers a
  * high-risk console with a PIN gate. A walk-away deterrent — fails open on error.
  */
 export async function createSessionLock(ctx: ContentScriptContext): Promise<void> {
   try {
-    // Session Lock is a pro feature — inert unless the plan unlocks it.
-    if (!(await hasFeature('session_lock'))) {
+    // Session Lock is a pro feature — inert unless the plan unlocks it. A team
+    // policy also unlocks it: `requireSessionLock` arrives on a signed bundle
+    // the Worker only issues to an org's members, which is a stronger signal
+    // than a locally cached entitlement that may not have refreshed yet.
+    // Without this, an enforced lock could silently never activate.
+    if (!(await hasFeature('session_lock')) && !(await isSessionLockEnforced())) {
       siDebug('session-lock', 'inert', { reason: 'not entitled' });
       return;
     }

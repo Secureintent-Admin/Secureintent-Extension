@@ -1,23 +1,27 @@
 import { createClerkClient } from '@clerk/chrome-extension/client';
-import { browser } from '#imports';
 import { API_BASE } from '@/lib/api/client';
 import {
   CLERK_JWT_TEMPLATE,
   CLERK_PUBLISHABLE_KEY,
   CLERK_SYNC_HOST,
-  isClerkConfigured,
+  IS_FIREFOX,
+  isAuthEnabled,
 } from '@/lib/clerkConfig';
-import { siDebug, siError } from '@/lib/debug';
+import { siDebug } from '@/lib/debug';
 import { entitlementItem } from '@/lib/entitlement';
 import { refreshEntitlement } from '@/lib/entitlement/refresh';
 import { offlineUsed } from '@/lib/quota/offline';
+import { getClerkTokenFromCookie, getClerkUserIdFromCookie } from './cookieToken';
 
 /**
  * Mint a fresh Clerk session token from the background service worker (no DOM).
  * Returns null when Clerk is unconfigured or the user is signed out.
  */
 export async function getClerkToken(): Promise<string | null> {
-  if (!isClerkConfigured()) return null;
+  if (!isAuthEnabled()) return null;
+  // Firefox: read the web-app session JWT from the cookie (the SDK can't mint one
+  // from the extension origin). The Worker hydrates missing claims server-side.
+  if (IS_FIREFOX) return getClerkTokenFromCookie();
   const clerk = await createClerkClient({
     publishableKey: CLERK_PUBLISHABLE_KEY,
     syncHost: CLERK_SYNC_HOST,
@@ -36,7 +40,8 @@ export async function refreshEntitlementBg() {
 
 /** The currently signed-in Clerk user id from the background session, or null. */
 export async function getClerkUserId(): Promise<string | null> {
-  if (!isClerkConfigured()) return null;
+  if (!isAuthEnabled()) return null;
+  if (IS_FIREFOX) return getClerkUserIdFromCookie();
   try {
     const clerk = await createClerkClient({
       publishableKey: CLERK_PUBLISHABLE_KEY,
@@ -102,30 +107,7 @@ export async function consumeUsage(): Promise<unknown | null> {
   }
 }
 
-/**
- * Start a Paddle checkout: get a token, ask the Worker for a hosted checkout URL,
- * and open it in a new tab. Triggered by the overlay's "Pro" upgrade button and
- * the popup's Upgrade button.
- */
-export async function openCheckout(): Promise<void> {
-  try {
-    const token = await getClerkToken();
-    if (!token) {
-      // Not signed in — open the popup so the user can sign in first.
-      await browser.action.openPopup().catch(() => {});
-      return;
-    }
-    const res = await fetch(`${API_BASE}/v1/billing/checkout`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) {
-      siError('billing', 'checkout request failed', res.status);
-      return;
-    }
-    const { url } = (await res.json()) as { url: string };
-    await browser.tabs.create({ url });
-  } catch (err) {
-    siError('billing', 'openCheckout failed', err);
-  }
-}
+// Note: there is deliberately no in-extension checkout starter here. Buying a
+// plan happens on the account page (ACCOUNT_URL), which already runs the Paddle
+// flow against the signed-in web session — a second, extension-initiated path
+// would be a second destination for the one "upgrade" intent.

@@ -1,13 +1,17 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { storage } from '#imports';
+import { browser, storage } from '#imports';
 import { PinBoxes } from '@/components/PinBoxes';
+import { ACCOUNT_URL } from '@/lib/clerkConfig';
+import { hasFeature } from '@/lib/entitlement';
 import { getOrCreateSalt, type KeyValueStore } from '@/lib/fingerprint';
 import { hashPin, verifyPin } from '@/lib/lock';
 import {
   clearSessionLockPin,
+  isSessionLockEnforced,
   sessionLockEnabledItem,
   sessionLockPinHashItem,
   sessionLockTimeoutItem,
+  setSessionLockEnabled,
   setSessionLockPin,
 } from '@/settings';
 
@@ -60,6 +64,15 @@ export function SessionLockSettings() {
 
   const [loaded, setLoaded] = useState(false); // storage values resolved
   const [animate, setAnimate] = useState(false); // enable collapse transition (after settle)
+  // Team Policy `requireSessionLock`: pinned on by the workspace admin. The
+  // member keeps a working toggle (so the click gets an answer) but the answer
+  // is an explanation, never a silent no-op.
+  const [enforced, setEnforced] = useState(false);
+  const [refused, setRefused] = useState(false); // they just tried to switch it off
+  // Session Lock is a Pro feature. Gate the whole config UI on the entitlement so
+  // a free/signed-out user can't set a PIN or enable it (the content script also
+  // refuses to activate without this feature — this keeps the UI honest too).
+  const [entitled, setEntitled] = useState(false);
 
   useEffect(() => {
     // Load all values at once so the body opens/collapses in a single paint
@@ -68,10 +81,14 @@ export function SessionLockSettings() {
       sessionLockEnabledItem.getValue(),
       sessionLockPinHashItem.getValue(),
       sessionLockTimeoutItem.getValue(),
-    ]).then(([e, h, ms]) => {
-      setEnabled(e);
+      hasFeature('session_lock'),
+      isSessionLockEnforced(),
+    ]).then(([e, h, ms, ent, enf]) => {
+      setEnabled(e || enf); // an enforced lock reads as on, whatever storage says
       setHasPin(Boolean(h));
       setTimeoutMin(Math.round(ms / MIN));
+      setEntitled(ent);
+      setEnforced(enf);
       setLoaded(true);
       // Turn the open/close animation on a couple of frames later, so the
       // initial state lands instantly without animating.
@@ -84,6 +101,8 @@ export function SessionLockSettings() {
   // off). Setup, the verify gate, and the enabled state all keep it open.
   // Stay collapsed until loaded so we never flash the expanded setup form.
   const open = loaded && (enabled || !hasPin || changing || gate !== null);
+  // Under enforcement, keep the enforced note in the re-measure deps so the body
+  // grows to fit it (see the max-height effect below).
 
   // Animate via measured max-height (reliable in both directions, unlike the
   // grid 0fr→1fr trick which can stall on expand). Re-measured on every content
@@ -94,7 +113,7 @@ export function SessionLockSettings() {
   useLayoutEffect(() => {
     const el = bodyRef.current;
     if (el) el.style.maxHeight = open ? `${el.scrollHeight}px` : '0px';
-  }, [open, gate, showForm, hasPin, enabled, error, changing, timeoutMin]);
+  }, [open, gate, showForm, hasPin, enabled, error, changing, timeoutMin, enforced, refused]);
 
   const resetForm = () => {
     setPin('');
@@ -119,12 +138,20 @@ export function SessionLockSettings() {
     }
     const action = gate;
     closeGate();
+    // Both writes go through the settings layer, which refuses under an enforced
+    // policy — the UI hides these paths anyway, but the guarantee lives there.
     if (action === 'disable') {
+      if (!(await setSessionLockEnabled(false))) {
+        setRefused(true);
+        return;
+      }
       setEnabled(false);
       toggleRef.current?.focus(); // body collapses (inert) — return focus to the toggle
-      await sessionLockEnabledItem.setValue(false);
     } else if (action === 'remove') {
-      await clearSessionLockPin();
+      if (!(await clearSessionLockPin())) {
+        setRefused(true);
+        return;
+      }
       setHasPin(false);
       setEnabled(false);
       resetForm();
@@ -135,12 +162,18 @@ export function SessionLockSettings() {
 
   // Enabling is free; turning OFF must be authorized with the PIN.
   const toggle = async () => {
+    if (enforced) {
+      // Answer the click. Silently ignoring it reads as a broken toggle; the
+      // member needs to know their team pinned this, not that the popup is buggy.
+      setRefused(true);
+      return;
+    }
     if (enabled) {
       setGate('disable');
       return;
     }
     setEnabled(true);
-    await sessionLockEnabledItem.setValue(true);
+    await setSessionLockEnabled(true);
   };
 
   const save = async () => {
@@ -165,6 +198,40 @@ export function SessionLockSettings() {
     await sessionLockTimeoutItem.setValue(min * MIN);
   };
 
+  const openAccount = () => {
+    browser.tabs.create({ url: ACCOUNT_URL }).catch(() => {});
+  };
+
+  // Not on a plan that includes Session Lock → show a locked, upgrade-only card.
+  // No toggle, no PIN form: a free user can neither enable nor configure it.
+  // An enforced policy overrides this: the team requires the lock, so the member
+  // must be able to set their PIN even if the cached entitlement lags behind.
+  if (loaded && !entitled && !enforced) {
+    return (
+      <section className="si-lockcfg">
+        <div className="si-lockcfg-head">
+          <span className="si-lockcfg-title">
+            <LockIcon />
+            Session Lock
+          </span>
+          <span className="si-plan-tag is-pro">Pro</span>
+        </div>
+        <div className={`si-lockcfg-body ${animate ? 'is-anim' : ''} is-open`}>
+          <div className="si-lockcfg-body-inner">
+            <p className="si-lockcfg-hint">
+              PIN-locks cloud consoles after inactivity. Available on Pro.
+            </p>
+            <div className="si-lockcfg-row">
+              <button type="button" className="si-lockcfg-save" onClick={openAccount}>
+                Upgrade to unlock
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="si-lockcfg">
       <div className="si-lockcfg-head">
@@ -172,15 +239,24 @@ export function SessionLockSettings() {
           <LockIcon />
           Session Lock
         </span>
+        {enforced && <span className="si-plan-tag">Team policy</span>}
         <button
           ref={toggleRef}
           type="button"
           role="switch"
           aria-checked={enabled}
+          // Stays clickable under enforcement on purpose: `toggle` answers with
+          // an explanation. A `disabled` switch would just look broken.
           className={`si-toggle ${enabled ? 'is-on' : ''}`}
           onClick={toggle}
           disabled={!hasPin || gate !== null}
-          title={hasPin ? 'Enable / disable' : 'Set a PIN first'}
+          title={
+            enforced
+              ? 'Required by your team policy'
+              : hasPin
+                ? 'Enable / disable'
+                : 'Set a PIN first'
+          }
         >
           <span className="si-toggle-dot" />
         </button>
@@ -192,6 +268,14 @@ export function SessionLockSettings() {
       >
         <div className="si-lockcfg-body-inner" inert={!open}>
           {!gate && <p className="si-lockcfg-hint">Locks cloud consoles after inactivity.</p>}
+
+          {enforced && (
+            <p className={`si-lockcfg-note is-enforced${refused ? ' is-error' : ''}`} role="status">
+              {refused
+                ? "Your team requires Session Lock — it can't be turned off."
+                : 'Required by your team policy.'}
+            </p>
+          )}
 
           {gate ? (
             <>
@@ -274,13 +358,17 @@ export function SessionLockSettings() {
                 <button type="button" className="si-lockcfg-btn" onClick={() => setGate('change')}>
                   Change PIN
                 </button>
-                <button
-                  type="button"
-                  className="si-lockcfg-btn is-danger"
-                  onClick={() => setGate('remove')}
-                >
-                  Remove PIN
-                </button>
+                {/* Removing the PIN disables the lock, so it's not offered while
+                    the team enforces it. Changing it stays available. */}
+                {!enforced && (
+                  <button
+                    type="button"
+                    className="si-lockcfg-btn is-danger"
+                    onClick={() => setGate('remove')}
+                  >
+                    Remove PIN
+                  </button>
+                )}
               </div>
             </>
           )}

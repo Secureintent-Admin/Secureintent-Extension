@@ -1,4 +1,4 @@
-import { browser } from '#imports';
+import { browserAction } from './browserAction';
 
 // Action-icon badge showing how many secrets were intercepted on the current tab.
 export const BADGE_BG = '#72ffff'; // Intent Cyan
@@ -14,12 +14,12 @@ export function nextBadgeText(current: string, add: number): string {
 // Add `add` detections to a tab's badge. Reads the existing badge text so the count
 // survives service-worker restarts (the browser persists per-tab badge state).
 export async function bumpBadge(tabId: number, add: number): Promise<void> {
-  const current = await browser.action.getBadgeText({ tabId });
-  await browser.action.setBadgeText({ tabId, text: nextBadgeText(current, add) });
-  await browser.action.setBadgeBackgroundColor({ tabId, color: BADGE_BG });
-  await browser.action.setBadgeTextColor?.({ tabId, color: BADGE_FG });
+  const current = await browserAction.getBadgeText({ tabId });
+  await browserAction.setBadgeText({ tabId, text: nextBadgeText(current, add) });
+  await browserAction.setBadgeBackgroundColor({ tabId, color: BADGE_BG });
+  await browserAction.setBadgeTextColor?.({ tabId, color: BADGE_FG });
 }
 
 export function clearBadge(tabId: number): Promise<void> {
-  return browser.action.setBadgeText({ tabId, text: '' });
+  return browserAction.setBadgeText({ tabId, text: '' });
 }

@@ -1,0 +1,34 @@
+# Chrome Web Store listing
+
+Source of truth for the store copy. The **short description** must stay in sync
+with `manifest.description` in `wxt.config.ts` (Web Store limit: 132 characters).
+The **detailed description** is pasted into the Web Store dashboard.
+
+## Short description (≤132 chars)
+
+> Warns you before you paste API keys, tokens, or passwords into AI chats and other sites — all on-device, your text never leaves.
+
+## Detailed description
+
+Plain text — the Chrome Web Store renders this linearly (no markdown). Paste the
+block below as-is; keep the `•` bullets and blank lines, don't add `*` or `#`.
+
+SecureIntent warns you the moment you're about to paste an API key, token, password, or other secret into a website where it doesn't belong — like AI chat and coding assistants.
+
+How it works
+• Detection runs entirely on your device. Your pasted text is never sent anywhere.
+• When a secret is detected, a warning appears with clear choices: Cancel, Paste anyway, or Paste anonymously — which redacts the secret and pastes the rest.
+• Pasting a large log? It can strip out secrets, IP addresses, and emails in one step before the text goes in.
+• Only an anonymous, one-way fingerprint of a detected secret is ever sent, and only for aggregate reporting — never the secret itself, and never your text.
+
+What it detects
+A wide range of credentials: API keys and access tokens from major cloud and developer platforms, private keys, high-entropy secrets, and common key = value credential patterns. Broad matches (such as card numbers) are confirmed by on-device validators to keep false positives low.
+
+Where it works
+Popular AI chat and coding assistants get dedicated support, and a catch-all guard covers text fields on other sites. Protection happens wherever you paste.
+
+Free & Pro
+Core detection and warnings are free, including a monthly allowance of Anonymise & Paste. Pro unlocks unlimited Anonymise & Paste, large-log sanitizing, restoring anonymized values later in the same session, and a PIN lock for high-risk cloud consoles. Pro is entirely optional — the free protection works with no sign-up.
+
+Privacy first
+Raw pasted text never leaves your device. The extension only computes a salted, one-way hash on-device for anonymous reporting. No sign-up to get started, no browsing tracking, and we never sell your data.

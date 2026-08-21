@@ -1,5 +1,5 @@
 import { browser, type ContentScriptContext, storage } from '#imports';
-import { DEFAULT_BUNDLE, getActiveBundle } from '@/lib/config';
+import { DEFAULT_BUNDLE, getActiveBundle, getPolicy, isBlockedHost } from '@/lib/config';
 import { acceptTerms, consentItem, consentSatisfied, isConsentAccepted } from '@/lib/consent';
 import { elapsedMs, siDebug, siError } from '@/lib/debug';
 import {
@@ -20,7 +20,7 @@ import {
   getOrCreateSalt,
   type KeyValueStore,
 } from '@/lib/fingerprint';
-import { canAnonymize, consumeAnonymize } from '@/lib/quota';
+import { consumeAnonymize, formatQuotaReset, getAnonymizeStatus } from '@/lib/quota';
 import type { TelemetryAction } from '@/lib/telemetry/types';
 import { type VaultStore, vaultPut, vaultSnapshot } from '@/lib/vault';
 import { mountOverlay } from '@/overlay/mount';
@@ -151,7 +151,28 @@ export async function createPasteGuard(
     DEFAULT_BUNDLE.sites[config.siteKey]?.inputSelector;
   if (!inputSelector) return; // unknown site — nothing to guard
 
+  // Team Policy Sync. A policy can only ride in on a bundle that passed
+  // validation + Ed25519 verification in syncConfig — nothing else ever writes
+  // the active bundle — so reaching here already means "signed by the Worker".
+  const policy = getPolicy(bundle);
+  // A blocked destination admits nothing at all — not the raw text, not an
+  // anonymised or sanitized version of it. The rule is about the site, not the
+  // secret, so every insert path is closed here.
+  const policyBlockedHost = isBlockedHost(location.hostname, policy.blockedSites);
+  // Under a policy that forbids the raw text, we must NOT re-insert it when our
+  // own code throws: that fail-open recovery would turn our bug into exactly the
+  // leak the policy exists to stop. The user still isn't trapped — the page and
+  // every other paste keep working; only this one paste is dropped.
+  const allowRawPaste = !policy.blockInsteadOfWarn && !policyBlockedHost;
+
   siDebug(config.name, 'guard active', { selector: inputSelector });
+  if (policy.blockInsteadOfWarn || policy.requireSessionLock || policyBlockedHost) {
+    siDebug(config.name, 'team policy active', {
+      policyVersion: bundle.policyVersion ?? null,
+      blockInsteadOfWarn: policy.blockInsteadOfWarn,
+      blockedHost: policyBlockedHost,
+    });
+  }
 
   const origin = location.origin;
 
@@ -190,8 +211,12 @@ export async function createPasteGuard(
         // Rehydrate: if the pasted text carries our tokens, prompt to swap them
         // back to the real secrets at insert time (or keep the tokens / cancel).
         // The secret stays out of the OS clipboard — it only ever materializes on
-        // insert. Fails open on any error.
-        if (TOKEN_RE.test(text)) {
+        // insert. Fails open on any error. Rehydrate is a Pro feature: without the
+        // entitlement, skip the prompt entirely and let the tokens paste as-is.
+        // Never offered on a policy-blocked host — restoring a real secret into a
+        // destination the team forbids is the one thing that rule prohibits. The
+        // inert tokens themselves may still paste; they carry nothing.
+        if (!policyBlockedHost && hasFeatureCached('rehydrate') && TOKEN_RE.test(text)) {
           const tokens = new Set(text.match(TOKEN_GLOBAL) ?? []);
           let restored = text;
           let known = 0;
@@ -231,11 +256,16 @@ export async function createPasteGuard(
         const tDetect = performance.now();
         const detections = detectSecrets(text, ghostMode ? ghostPatterns : patterns);
         const detectMs = elapsedMs(tDetect);
-        if (detections.length === 0) return; // let normal paste happen
+        // A blocked destination is about the SITE, not the secret: the admin is
+        // told "the extension refuses every paste, whether or not it finds a
+        // secret", so a clean paste must be stopped here too. Letting it through
+        // would quietly break the promise the console makes to whoever set the
+        // rule — and these are the sites a team has decided to feed nothing.
+        if (detections.length === 0 && !policyBlockedHost) return; // normal paste
 
         e.preventDefault();
         e.stopImmediatePropagation();
-        recoverPaste = () => insertText(input, text);
+        if (allowRawPaste) recoverPaste = () => insertText(input, text);
         // Show the actual secret warning for this paste. Extracted so the
         // consent gate can call it after the user agrees (first-paste consent).
         const showWarning = async () => {
@@ -281,9 +311,19 @@ export async function createPasteGuard(
 
           // Gate the pro action for this overlay. Ghost pastes need the `ghost`
           // feature (Pro-only). Standard anonymise is free with a monthly quota,
-          // then Pro — canAnonymize() reflects Pro OR remaining free allowance.
+          // then Pro — the status below reflects Pro OR remaining free allowance.
           const snapshot = getEntitlementSnapshot();
-          const proAction = ghostMode ? hasFeatureCached('ghost') : await canAnonymize(snapshot);
+          const quota = ghostMode ? null : await getAnonymizeStatus(snapshot);
+          const proAction = ghostMode
+            ? hasFeatureCached('ghost')
+            : Boolean(quota && (quota.unlimited || quota.remaining > 0));
+          // "Spent your free allowance" is a different situation from "never had
+          // this feature", so the overlay is told which one it is: a user at 0/10
+          // needs the reset date, not a plain Pro badge.
+          const quotaExhausted =
+            quota && !quota.unlimited && quota.remaining <= 0
+              ? { limit: quota.limit, resetsOn: formatQuotaReset() }
+              : undefined;
 
           open = true;
           const tMount = performance.now();
@@ -293,20 +333,30 @@ export async function createPasteGuard(
             detections,
             summary: ghostMode ? summarize(detections) : undefined,
             pro: proAction,
+            quotaExhausted,
+            // Team policy: a blocked destination gets the notice view (no paste
+            // route at all); blockInsteadOfWarn just drops "Paste anyway".
+            policyBlock: policyBlockedHost ? { host: location.hostname } : undefined,
+            blockRawPaste: policy.blockInsteadOfWarn,
             onAction: (action) => {
               if (action === 'upgrade') {
-                // Hand off to the background to open the pricing / tiers page.
-                browser.runtime.sendMessage({ type: 'si-open-tiers' }).catch(() => {});
+                // Hand off to the background to open the account page — the one
+                // place an already-installed user can actually buy or manage a plan.
+                browser.runtime.sendMessage({ type: 'si-open-upgrade' }).catch(() => {});
                 overlay.remove();
                 open = false;
                 return;
               }
               if (action === 'rehydrate') return; // only the rehydrate overlay emits this
-              if (action === 'paste') insertText(input, text);
-              else if (action === 'sanitize' && proAction) {
+              // `allowRawPaste` is re-checked here, not just in the UI: the
+              // policy has to hold even if the overlay were driven some other
+              // way. Under a block the paste is simply dropped (= cancel).
+              if (action === 'paste') {
+                if (allowRawPaste) insertText(input, text);
+              } else if (action === 'sanitize' && proAction && !policyBlockedHost) {
                 // Ghost: strip every finding to a typed placeholder. Irreversible.
                 insertText(input, sanitize(text, detections));
-              } else if (action === 'redact' && proAction) {
+              } else if (action === 'redact' && proAction && !policyBlockedHost) {
                 // Count this Anonymise & Paste against the monthly quota (no-op for
                 // Pro). Fire-and-forget — canAnonymize() already gated the action.
                 consumeAnonymize(snapshot).catch(() => {});
@@ -321,7 +371,11 @@ export async function createPasteGuard(
               }
               notifyAction({ ...featureCtx, action }); // pro: audit log / team report
               if (!ghostMode && action !== 'sanitize' && fingerprintsPromise) {
-                const telemetryAction = ACTION_BY_OVERLAY[action];
+                // A refused "paste" inserted nothing, so it is reported as
+                // cancelled — never as paste_anyway, which would tell the team's
+                // dashboard a secret went through when it did not.
+                const telemetryAction =
+                  action === 'paste' && !allowRawPaste ? 'cancelled' : ACTION_BY_OVERLAY[action];
                 fingerprintsPromise.then((dets) => {
                   if (dets.length === 0) return;
                   sendTelemetry(
@@ -334,6 +388,8 @@ export async function createPasteGuard(
                       source: snapshot.source,
                       signedIn: snapshot.signedIn,
                       businessDomain: snapshot.businessDomain,
+                      orgId: snapshot.orgId,
+                      actorId: snapshot.actorId,
                     }),
                   );
                 });

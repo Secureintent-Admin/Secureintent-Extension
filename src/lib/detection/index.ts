@@ -9,7 +9,7 @@ export { locateInText, type SecretLocation } from './locate';
 export { redact } from './redact';
 export { type GhostSummary, sanitize, summarize } from './sanitize';
 export { TOKEN_RE, type TokenizeResult, tokenizeSecrets, type VaultEntry } from './tokenize';
-export type { Detection, SecretType } from './types';
+export type { Detection, PatternOrigin, SecretType } from './types';
 
 function overlaps(a: Detection, b: Detection): boolean {
   return a.start < b.end && b.start < a.end;
@@ -52,13 +52,18 @@ export function detectSecrets(text: string, patterns: Pattern[] = PATTERNS): Det
         if (pattern.validate === 'entropy' && inUrl(text, m.index, m.index + m[0].length)) {
           continue;
         }
-        raw.push({
+        const det: Detection = {
           type: pattern.type,
           label: pattern.label,
           match: m[0],
           start: m.index,
           end: m.index + m[0].length,
-        });
+        };
+        // Carried so the UI can say which findings came from the team's own
+        // rules. Attached only when the pattern had it, so a detection from the
+        // default catalogue is the same object it has always been.
+        if (pattern.origin !== undefined) det.origin = pattern.origin;
+        raw.push(det);
       }
     }
   }

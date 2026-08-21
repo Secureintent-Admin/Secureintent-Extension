@@ -38,6 +38,8 @@ export function evaluateBlob(
     features: blob.features,
     source: blob.source,
     businessDomain: blob.businessDomain ?? null,
+    email: blob.email ?? null,
+    org: blob.org ?? null,
   };
 }
 
@@ -76,6 +78,17 @@ export interface EntitlementSnapshot {
   pro: boolean;
   signedIn: boolean;
   businessDomain: string | null;
+  /** The team this seat belongs to, so events can be grouped by company. */
+  orgId: string | null;
+  orgName: string | null;
+  /**
+   * Stable pseudonym for this person inside their team: SHA-256 of the Clerk
+   * user id and the org id. Lets a team's own dashboard count distinct people
+   * without us shipping their identity — an admin's view is aggregate today,
+   * and this is the key that could join to a name later if they ever turn that
+   * on. Null outside a team: individual telemetry stays fully anonymous.
+   */
+  actorId: string | null;
 }
 
 const FREE_SNAPSHOT: EntitlementSnapshot = {
@@ -84,7 +97,20 @@ const FREE_SNAPSHOT: EntitlementSnapshot = {
   pro: false,
   signedIn: false,
   businessDomain: null,
+  orgId: null,
+  orgName: null,
+  actorId: null,
 };
+
+/** SHA-256(userId:orgId), hex, truncated — a per-team pseudonym, not an id. */
+async function computeActorId(userId: string, orgId: string): Promise<string> {
+  const bytes = new TextEncoder().encode(`${userId}:${orgId}`);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return [...new Uint8Array(digest)]
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+    .slice(0, 32);
+}
 
 let cachedFeatures = new Set<string>();
 let cachedSnapshot: EntitlementSnapshot = FREE_SNAPSHOT;
@@ -101,6 +127,12 @@ async function computeCache(): Promise<{ features: Set<string>; snapshot: Entitl
       pro: ent.pro,
       signedIn: stored !== null,
       businessDomain: ent.businessDomain,
+      orgId: ent.org?.id ?? null,
+      orgName: ent.org?.name ?? null,
+      actorId:
+        ent.org && stored?.blob.clerkUserId
+          ? await computeActorId(stored.blob.clerkUserId, ent.org.id)
+          : null,
     },
   };
 }
@@ -128,6 +160,14 @@ export function hasFeatureCached(key: FeatureKey): boolean {
 /** Synchronous user-context snapshot for telemetry. Reads the primed cache. */
 export function getEntitlementSnapshot(): EntitlementSnapshot {
   return cachedSnapshot;
+}
+
+/**
+ * Whether this person administers a team. Drives the console link: a member has
+ * nothing to manage, so offering them the console is a dead end.
+ */
+export function canManageTeam(ent: ActiveEntitlement): boolean {
+  return ent.org?.role === 'org:admin';
 }
 
 /** Async one-shot gate (popup / non-hot paths). */

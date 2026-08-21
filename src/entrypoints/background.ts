@@ -1,16 +1,17 @@
 import { browser, defineBackground } from '#imports';
 import { bumpBadge, clearBadge } from '@/lib/badge';
-import { TIERS_URL } from '@/lib/clerkConfig';
-import { isConsentAccepted } from '@/lib/consent';
+import { browserAction } from '@/lib/browserAction';
+import { ACCOUNT_URL } from '@/lib/clerkConfig';
+import { consentItem, isConsentAccepted } from '@/lib/consent';
 import { allowVaultInContentScripts } from '@/lib/vault';
 import { syncConfig } from '@/services/configService';
 import {
   consumeUsage,
   enforceEntitlementBinding,
   getUsageStatus,
-  openCheckout,
   refreshEntitlementBg,
 } from '@/services/entitlementBackground';
+import { markInstallPending, reportInstall, syncUninstallUrl } from '@/services/installAttribution';
 import { handleRefreshMessage, SYNC_ALARM } from '@/services/scheduler';
 
 const WELCOME_URL = '/welcome.html';
@@ -18,11 +19,11 @@ const WELCOME_URL = '/welcome.html';
 /** Toolbar "!" badge nag while the user hasn't accepted the Terms & Privacy. */
 async function updateConsentBadge() {
   if (await isConsentAccepted()) {
-    browser.action.setBadgeText({ text: '' });
+    browserAction.setBadgeText({ text: '' });
     return;
   }
-  browser.action.setBadgeText({ text: '!' });
-  browser.action.setBadgeBackgroundColor({ color: '#ff6b6b' });
+  browserAction.setBadgeText({ text: '!' });
+  browserAction.setBadgeBackgroundColor({ color: '#ff6b6b' });
 }
 
 export default defineBackground(() => {
@@ -31,10 +32,29 @@ export default defineBackground(() => {
   browser.runtime.onInstalled.addListener((details) => {
     if (details.reason === 'install') {
       browser.tabs.create({ url: browser.runtime.getURL(WELCOME_URL) }).catch(() => {});
+      // Arm the install report (every install, creator or not — see the module
+      // note). On Firefox it waits for the Terms accept below.
+      markInstallPending().then(() => reportInstall());
     }
     updateConsentBadge();
+    // Nothing of ours runs at uninstall time, so the address the browser opens
+    // then has to be registered now — and again at every startup, since a new
+    // version changes what it reports.
+    syncUninstallUrl();
   });
   updateConsentBadge();
+  syncUninstallUrl();
+
+  // Accepting the Terms releases the install report on Firefox (Chrome sends it
+  // straight away; there it's already gone by now and this is a no-op).
+  consentItem.watch(() => {
+    updateConsentBadge();
+    reportInstall();
+    // Firefox arms (or disarms) the goodbye ping with the same decision.
+    syncUninstallUrl();
+  });
+  // Browser restart: retry a report that never made it out (offline at install).
+  reportInstall();
 
   // Auto-sync entitlement on sign-in / sign-out. Clerk mirrors the web-app
   // session into extension storage; when those keys change we refresh the cached
@@ -60,6 +80,7 @@ export default defineBackground(() => {
     if (a.name === SYNC_ALARM.name) {
       syncConfig();
       refreshEntitlementBg().then(() => enforceEntitlementBinding()); // ride the existing 2h alarm
+      reportInstall(); // retry an install report that couldn't send (offline at install)
     }
   });
   browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
@@ -69,14 +90,11 @@ export default defineBackground(() => {
       bumpBadge(sender.tab.id, (msg as { count?: number }).count ?? 1);
       return false; // no async response needed
     }
-    // Overlay/popup asked to start a Paddle checkout.
-    if (type === 'si-open-checkout') {
-      openCheckout();
-      return false;
-    }
-    // Upgrade CTA → open the pricing / tiers section on the web app.
-    if (type === 'si-open-tiers') {
-      browser.tabs.create({ url: TIERS_URL }).catch(() => {});
+    // Every upgrade CTA lands in the same place: the account page, where the
+    // signed-in user can actually buy or manage a plan. (The popup's own Upgrade
+    // button opens ACCOUNT_URL directly — same destination, no message needed.)
+    if (type === 'si-open-upgrade') {
+      browser.tabs.create({ url: ACCOUNT_URL }).catch(() => {});
       return false;
     }
     // User accepted Terms & Privacy (welcome page or popup) → clear the nag badge.

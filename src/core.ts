@@ -9,8 +9,8 @@
 // Build on top of the paste guard.
 export { createPasteGuard } from '@/content/createPasteGuard';
 export type { SiteConfig } from '@/content/types';
-export type { ConfigBundle } from '@/lib/config';
-export { DEFAULT_BUNDLE, getActiveBundle } from '@/lib/config';
+export type { BundlePolicy, ConfigBundle } from '@/lib/config';
+export { DEFAULT_BUNDLE, getActiveBundle, getPolicy, isBlockedHost } from '@/lib/config';
 export type { Detection, SecretType } from '@/lib/detection';
 export { compilePatterns, detectSecrets, redact } from '@/lib/detection';
 export type { ActionContext, DetectionContext, Feature } from '@/lib/features';

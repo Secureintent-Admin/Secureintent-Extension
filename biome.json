@@ -30,7 +30,7 @@
       }
     },
     {
-      "includes": ["src/overlay/Overlay.tsx"],
+      "includes": ["src/overlay/Overlay.tsx", "src/overlay/ConsentGate.tsx"],
       "linter": {
         "rules": {
           "a11y": {

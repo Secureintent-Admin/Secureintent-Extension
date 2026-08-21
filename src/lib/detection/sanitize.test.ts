@@ -70,4 +70,30 @@ describe('summarize', () => {
   test('empty detections summarize to zero', () => {
     expect(summarize([])).toEqual({ total: 0, items: [] });
   });
+
+  test('a group of team-rule findings is marked so the summary can badge it', () => {
+    const team = (match: string, start: number): Detection => ({
+      ...det(match, start, 'Acme internal token', 'known-key'),
+      origin: 'team',
+    });
+    const out = summarize([team('ACME-1', 0), team('ACME-2', 10), det('a@b.com', 20, 'Email')]);
+    expect(out.items[0]).toEqual({ label: 'Acme internal token', count: 2, origin: 'team' });
+    expect(out.items[1]).toEqual({ label: 'Email', count: 1 });
+    expect('origin' in out.items[1]).toBe(false);
+  });
+
+  test('default-only findings carry no origin at all (unchanged summary)', () => {
+    const out = summarize([det('10.0.0.1', 0, 'Internal IP')]);
+    expect(out).toEqual({ total: 1, items: [{ label: 'Internal IP', count: 1 }] });
+    expect('origin' in out.items[0]).toBe(false);
+  });
+
+  test('a label shared by a team rule and a default one is not claimed as a team rule', () => {
+    const shared = 'Credential assignment';
+    const out = summarize([
+      { ...det('a=1', 0, shared, 'env-credential'), origin: 'team' },
+      det('b=2', 10, shared, 'env-credential'),
+    ]);
+    expect(out.items[0]).toEqual({ label: shared, count: 2 });
+  });
 });

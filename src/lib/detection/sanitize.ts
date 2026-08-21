@@ -1,8 +1,9 @@
-import type { Detection } from './types';
+import type { Detection, PatternOrigin } from './types';
 
 export interface GhostSummary {
   total: number;
-  items: { label: string; count: number }[];
+  /** `origin` is set only when every finding under that label was a team rule. */
+  items: { label: string; count: number; origin?: PatternOrigin }[];
 }
 
 /** Short placeholder category for a finding, derived from its label. */
@@ -41,12 +42,28 @@ export function sanitize(text: string, detections: Detection[]): string {
   return out;
 }
 
-/** Count findings grouped by label, most frequent first, for the summary overlay. */
+/**
+ * Count findings grouped by label, most frequent first, for the summary overlay.
+ * A group is marked `origin: 'team'` only when *every* finding in it came from a
+ * team rule — a label shared with the default catalogue stays unbadged rather
+ * than claiming the team wrote a rule it didn't.
+ */
 export function summarize(detections: Detection[]): GhostSummary {
-  const byLabel = new Map<string, number>();
-  for (const d of detections) byLabel.set(d.label, (byLabel.get(d.label) ?? 0) + 1);
+  const byLabel = new Map<string, { count: number; allTeam: boolean }>();
+  for (const d of detections) {
+    const entry = byLabel.get(d.label);
+    const isTeam = d.origin === 'team';
+    if (entry) {
+      entry.count++;
+      entry.allTeam &&= isTeam;
+    } else {
+      byLabel.set(d.label, { count: 1, allTeam: isTeam });
+    }
+  }
   const items = [...byLabel.entries()]
-    .map(([label, count]) => ({ label, count }))
+    .map(([label, { count, allTeam }]) =>
+      allTeam ? { label, count, origin: 'team' as const } : { label, count },
+    )
     .sort((a, b) => b.count - a.count);
   return { total: detections.length, items };
 }

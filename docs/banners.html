@@ -1,0 +1,595 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SecureIntent · Banner generator</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --cyan: #72ffff;
+        --bg: #060708;
+        --panel: #0c1017;
+        --text: #eef2f5;
+        --muted: #8b949e;
+        --hair: rgba(255, 255, 255, 0.09);
+        --mono: "Fira Code", ui-monospace, "SF Mono", Menlo, monospace;
+        --sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: radial-gradient(120% 90% at 12% -10%, rgba(114,255,255,0.06), transparent 55%), var(--bg);
+        color: var(--text);
+        font-family: var(--sans);
+        -webkit-font-smoothing: antialiased;
+      }
+      .wrap { max-width: 1120px; margin: 0 auto; padding: 40px 24px 80px; }
+      h1 { font-size: 30px; letter-spacing: -0.02em; margin: 0 0 6px; }
+      .lede { color: var(--muted); margin: 0 0 8px; max-width: 60ch; }
+      .hint {
+        font-family: var(--mono); font-size: 12px; color: var(--cyan);
+        border: 1px solid var(--hair); border-radius: 999px; display: inline-block;
+        padding: 6px 12px; margin-top: 10px;
+      }
+      .grid { display: flex; flex-direction: column; gap: 30px; margin-top: 34px; }
+      .card {
+        background: var(--panel); border: 1px solid var(--hair);
+        border-radius: 16px; padding: 16px; overflow: hidden;
+      }
+      .card-top {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 12px; margin-bottom: 12px; flex-wrap: wrap;
+      }
+      .card-name { font-weight: 650; font-size: 15px; }
+      .card-dim { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+      .dl {
+        font-family: var(--mono); font-size: 12px; font-weight: 700;
+        color: #052656; background: var(--cyan); border: none; border-radius: 999px;
+        padding: 8px 16px; cursor: pointer; transition: filter 150ms ease;
+      }
+      .dl:hover { filter: brightness(1.08); }
+      .stage {
+        border-radius: 10px; overflow: hidden; border: 1px solid var(--hair);
+        background: repeating-conic-gradient(#0f141b 0% 25%, #0b0f15 0% 50%) 50% / 22px 22px;
+      }
+      canvas { display: block; width: 100%; height: auto; cursor: pointer; }
+      footer { margin-top: 40px; color: var(--muted); font-size: 13px; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>SecureIntent — banner generator</h1>
+      <p class="lede">On-brand promotional images at the exact Chrome Web Store sizes. Click any banner (or its Download button) to save a pixel-perfect PNG.</p>
+      <span class="hint">Rendered on-device with &lt;canvas&gt; — no external assets</span>
+
+      <div class="grid" id="grid"></div>
+
+      <footer>
+        All four are Chrome Web Store screenshots at 1280×800 px — you can upload up to 5. Click any to download its PNG.
+      </footer>
+    </div>
+
+    <script>
+      const CYAN = "#72ffff";
+      const NAVY = "#052656";
+
+      // ---- primitives --------------------------------------------------------
+      function bg(ctx, w, h) {
+        const base = ctx.createLinearGradient(0, 0, w, h);
+        base.addColorStop(0, "#0a0f16");
+        base.addColorStop(1, "#050608");
+        ctx.fillStyle = base;
+        ctx.fillRect(0, 0, w, h);
+        // cyan ambient glows
+        const g1 = ctx.createRadialGradient(w * 0.14, -h * 0.1, 0, w * 0.14, -h * 0.1, h * 1.1);
+        g1.addColorStop(0, "rgba(114,255,255,0.14)");
+        g1.addColorStop(1, "rgba(114,255,255,0)");
+        ctx.fillStyle = g1;
+        ctx.fillRect(0, 0, w, h);
+        const g2 = ctx.createRadialGradient(w * 0.9, h * 1.05, 0, w * 0.9, h * 1.05, h * 0.9);
+        g2.addColorStop(0, "rgba(60,120,255,0.08)");
+        g2.addColorStop(1, "rgba(60,120,255,0)");
+        ctx.fillStyle = g2;
+        ctx.fillRect(0, 0, w, h);
+        // hairline top accent
+        const hair = ctx.createLinearGradient(0, 0, w, 0);
+        hair.addColorStop(0, "rgba(114,255,255,0)");
+        hair.addColorStop(0.5, "rgba(114,255,255,0.5)");
+        hair.addColorStop(1, "rgba(114,255,255,0)");
+        ctx.fillStyle = hair;
+        ctx.fillRect(0, 0, w, Math.max(1, h * 0.004));
+      }
+
+      // The "//" brand mark. `h` = mark height in px, top-left at (x, y).
+      function logo(ctx, x, y, h) {
+        const s = h / 250;
+        ctx.save();
+        ctx.lineCap = "round";
+        ctx.lineWidth = 28 * s;
+        ctx.strokeStyle = "#fff";
+        ctx.beginPath();
+        ctx.moveTo(x + 50 * s, y + 195 * s);
+        ctx.lineTo(x + 110 * s, y + 75 * s);
+        ctx.stroke();
+        ctx.strokeStyle = CYAN;
+        ctx.beginPath();
+        ctx.moveTo(x + 130 * s, y + 195 * s);
+        ctx.lineTo(x + 160 * s, y + 135 * s);
+        ctx.stroke();
+        ctx.fillStyle = CYAN;
+        ctx.beginPath();
+        ctx.arc(x + 190 * s, y + 75 * s, 14 * s, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        return 204 * s; // approx mark width
+      }
+
+      // Shield with check inside a glowing cyan ring, centred at (cx, cy).
+      function shield(ctx, cx, cy, r) {
+        // glow ring
+        const ring = ctx.createRadialGradient(cx, cy, r * 0.2, cx, cy, r * 1.5);
+        ring.addColorStop(0, "rgba(114,255,255,0.22)");
+        ring.addColorStop(1, "rgba(114,255,255,0)");
+        ctx.fillStyle = ring;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r * 1.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.save();
+        ctx.strokeStyle = "rgba(114,255,255,0.35)";
+        ctx.lineWidth = Math.max(1, r * 0.03);
+        ctx.beginPath();
+        ctx.arc(cx, cy, r * 1.12, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+        // shield path in a 24-unit box
+        ctx.save();
+        ctx.translate(cx - r, cy - r);
+        ctx.scale((2 * r) / 24, (2 * r) / 24);
+        ctx.strokeStyle = CYAN;
+        ctx.lineJoin = "round";
+        ctx.lineCap = "round";
+        ctx.lineWidth = 1.4;
+        const body = new Path2D("M12 3l7 3v5.5c0 4.3-2.9 7.4-7 8.8-4.1-1.4-7-4.5-7-8.8V6l7-3z");
+        ctx.stroke(body);
+        ctx.lineWidth = 1.7;
+        const check = new Path2D("M8.7 12l2.1 2.1 4-4.2");
+        ctx.stroke(check);
+        ctx.restore();
+      }
+
+      function pill(ctx, x, y, text, fs) {
+        ctx.font = `600 ${fs}px ${getMono()}`;
+        const padX = fs * 0.9;
+        const w = ctx.measureText(text).width + padX * 2;
+        const h = fs * 2;
+        ctx.save();
+        roundRect(ctx, x, y, w, h, h / 2);
+        ctx.fillStyle = "rgba(114,255,255,0.08)";
+        ctx.fill();
+        ctx.strokeStyle = "rgba(114,255,255,0.22)";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.fillStyle = CYAN;
+        ctx.textBaseline = "middle";
+        ctx.fillText(text, x + padX, y + h / 2 + 0.5);
+        ctx.restore();
+        return w;
+      }
+
+      function roundRect(ctx, x, y, w, h, r) {
+        if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); return; }
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.arcTo(x + w, y, x + w, y + h, r);
+        ctx.arcTo(x + w, y + h, x, y + h, r);
+        ctx.arcTo(x, y + h, x, y, r);
+        ctx.arcTo(x, y, x + w, y, r);
+        ctx.closePath();
+      }
+
+      const getSans = () => `${'"Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif'}`;
+      const getMono = () => `${'"Fira Code", ui-monospace, Menlo, monospace'}`;
+
+      // ---- layouts -----------------------------------------------------------
+      function wordmark(ctx, x, y, fs) {
+        ctx.textBaseline = "alphabetic";
+        ctx.font = `700 ${fs}px ${getMono()}`;
+        ctx.fillStyle = "#fff";
+        ctx.fillText("SecureIntent", x, y);
+        const w = ctx.measureText("SecureIntent").width;
+        ctx.fillStyle = CYAN;
+        ctx.fillText(".ai", x + w, y);
+      }
+
+      function drawWide(ctx, W, H) {
+        bg(ctx, W, H);
+        const padX = Math.round(W * 0.05);
+        // shield on the right
+        const sr = Math.min(H * 0.24, W * 0.135);
+        const shieldCx = W - padX - sr * 1.15;
+        shield(ctx, shieldCx, H * 0.5, sr);
+        // text column stops safely before the shield (incl. its glow ring)
+        const availW = shieldCx - sr * 1.3 - padX;
+
+        // brand row
+        const lh = Math.min(H * 0.085, W * 0.05);
+        const lw = logo(ctx, padX, H * 0.12, lh * 1.15);
+        wordmark(ctx, padX + lw + 12, H * 0.12 + lh * 0.98, lh * 0.72);
+
+        // headline — auto-fit the longest line into the text column
+        ctx.textBaseline = "alphabetic";
+        let hf = Math.min(H * 0.125, W * 0.052);
+        ctx.font = `750 ${hf}px ${getSans()}`;
+        const longest = ctx.measureText("Catch secrets before").width;
+        if (longest > availW) hf *= availW / longest;
+        ctx.font = `750 ${hf}px ${getSans()}`;
+        const hy = H * 0.5;
+        ctx.fillStyle = "#fff";
+        ctx.fillText("Catch secrets before", padX, hy);
+        ctx.fillText("you ", padX, hy + hf * 1.05);
+        const w2 = ctx.measureText("you ").width;
+        ctx.fillStyle = CYAN;
+        ctx.fillText("paste", padX + w2, hy + hf * 1.05);
+
+        // subhead — also fit within the text column
+        const subText = "On-device protection for API keys, tokens & passwords.";
+        let subf = hf * 0.36;
+        ctx.font = `400 ${subf}px ${getSans()}`;
+        const subw = ctx.measureText(subText).width;
+        if (subw > availW) subf *= availW / subw;
+        ctx.font = `400 ${subf}px ${getSans()}`;
+        ctx.fillStyle = "#aeb7c0";
+        const subY = hy + hf * 1.05 + subf * 2.1;
+        ctx.fillText(subText, padX, subY);
+
+        // pills
+        const pf = subf * 0.64;
+        const py = subY + subf * 1.3;
+        let px = padX;
+        for (const t of ["On-device", "Zero retention", "Free"]) {
+          px += pill(ctx, px, py, t, pf) + 10;
+        }
+      }
+
+      function checkMark(ctx, cx, cy, r) {
+        ctx.save();
+        ctx.strokeStyle = CYAN;
+        ctx.lineWidth = r * 0.14;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.lineWidth = r * 0.18;
+        ctx.beginPath();
+        ctx.moveTo(cx - r * 0.42, cy + r * 0.02);
+        ctx.lineTo(cx - r * 0.08, cy + r * 0.36);
+        ctx.lineTo(cx + r * 0.46, cy - r * 0.34);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      function brandRow(ctx, W, H, padX) {
+        const lh = H * 0.075;
+        const lw = logo(ctx, padX, H * 0.1, lh * 1.15);
+        wordmark(ctx, padX + lw + 12, H * 0.1 + lh * 0.98, lh * 0.72);
+      }
+
+      // Centred hero.
+      function drawCentered(ctx, W, H) {
+        bg(ctx, W, H);
+        const cx = W / 2;
+        shield(ctx, cx, H * 0.31, H * 0.15);
+        // two-colour centred headline
+        let hf = H * 0.092;
+        ctx.font = `750 ${hf}px ${getSans()}`;
+        const a = "Catch secrets before you ";
+        const b = "paste";
+        const avail = W * 0.88;
+        let total = ctx.measureText(a).width + ctx.measureText(b).width;
+        if (total > avail) { hf *= avail / total; ctx.font = `750 ${hf}px ${getSans()}`; }
+        const wa = ctx.measureText(a).width;
+        const wb = ctx.measureText(b).width;
+        const sx = cx - (wa + wb) / 2;
+        ctx.textBaseline = "alphabetic";
+        ctx.fillStyle = "#fff";
+        ctx.fillText(a, sx, H * 0.6);
+        ctx.fillStyle = CYAN;
+        ctx.fillText(b, sx + wa, H * 0.6);
+        // subhead + tagline centred
+        ctx.textAlign = "center";
+        ctx.fillStyle = "#aeb7c0";
+        ctx.font = `400 ${H * 0.032}px ${getSans()}`;
+        ctx.fillText("On-device protection for API keys, tokens & passwords.", cx, H * 0.72);
+        ctx.fillStyle = CYAN;
+        ctx.font = `600 ${H * 0.026}px ${getMono()}`;
+        ctx.fillText("On-device   ·   Zero retention   ·   Free", cx, H * 0.83);
+        ctx.textAlign = "left";
+      }
+
+      // Feature checklist.
+      function drawFeatures(ctx, W, H) {
+        bg(ctx, W, H);
+        const padX = W * 0.08;
+        brandRow(ctx, W, H, padX);
+        // faint shield watermark on the right
+        ctx.save();
+        ctx.globalAlpha = 0.5;
+        shield(ctx, W * 0.83, H * 0.56, H * 0.2);
+        ctx.restore();
+        ctx.textBaseline = "alphabetic";
+        ctx.fillStyle = "#fff";
+        ctx.font = `750 ${H * 0.07}px ${getSans()}`;
+        ctx.fillText("Everything you need to paste safely", padX, H * 0.32);
+        const feats = [
+          ["Detection & warnings", "Flags API keys, tokens & passwords before they're pasted"],
+          ["Anonymise & Paste", "Redact the secret, paste the rest — in one click"],
+          ["Ghost log sanitiser", "Strip secrets, IPs & emails out of large logs"],
+          ["Session Lock", "PIN-lock high-risk cloud consoles when idle"],
+        ];
+        let y = H * 0.46;
+        const rowH = H * 0.125;
+        const cr = H * 0.03;
+        for (const [label, desc] of feats) {
+          checkMark(ctx, padX + cr, y, cr);
+          const tx = padX + cr * 2 + H * 0.03;
+          ctx.textBaseline = "alphabetic";
+          ctx.fillStyle = "#fff";
+          ctx.font = `650 ${H * 0.04}px ${getSans()}`;
+          ctx.fillText(label, tx, y);
+          ctx.fillStyle = "#8b949e";
+          ctx.font = `400 ${H * 0.028}px ${getSans()}`;
+          ctx.fillText(desc, tx, y + H * 0.045);
+          y += rowH;
+        }
+      }
+
+      // Privacy statement.
+      function drawPrivacy(ctx, W, H) {
+        bg(ctx, W, H);
+        const cx = W / 2;
+        shield(ctx, cx, H * 0.28, H * 0.14);
+        ctx.textAlign = "center";
+        ctx.textBaseline = "alphabetic";
+        const hf = H * 0.088;
+        ctx.font = `750 ${hf}px ${getSans()}`;
+        ctx.fillStyle = "#fff";
+        ctx.fillText("Your text never leaves", cx, H * 0.56);
+        ctx.fillStyle = CYAN;
+        ctx.fillText("your device.", cx, H * 0.56 + hf * 1.08);
+        ctx.fillStyle = "#aeb7c0";
+        ctx.font = `400 ${H * 0.03}px ${getSans()}`;
+        ctx.fillText("On-device detection. Only a one-way hash is ever sent — never your secrets.", cx, H * 0.8);
+        ctx.fillStyle = CYAN;
+        ctx.font = `600 ${H * 0.025}px ${getMono()}`;
+        ctx.fillText("On-device   ·   Zero retention   ·   No tracking", cx, H * 0.9);
+        ctx.textAlign = "left";
+      }
+
+      // ---- the actual warning popup, drawn to scale ------------------------
+      function fitFont(ctx, text, weight, family, size, maxW) {
+        ctx.font = `${weight} ${size}px ${family}`;
+        const w = ctx.measureText(text).width;
+        if (w > maxW) size *= maxW / w;
+        ctx.font = `${weight} ${size}px ${family}`;
+        return size;
+      }
+
+      function dialogButton(ctx, x, y, w, h, label, kind, s) {
+        roundRect(ctx, x, y, w, h, 9 * s);
+        if (kind === "ghost") {
+          ctx.fillStyle = "rgba(255,255,255,0.05)"; ctx.fill();
+          ctx.strokeStyle = "rgba(255,255,255,0.18)";
+        } else if (kind === "danger") {
+          ctx.strokeStyle = "rgba(255,107,107,0.4)";
+        } else {
+          const g = ctx.createLinearGradient(x, y, x, y + h);
+          g.addColorStop(0, "#8cffff"); g.addColorStop(1, CYAN);
+          ctx.fillStyle = g; ctx.fill();
+          ctx.strokeStyle = CYAN;
+        }
+        ctx.lineWidth = 1 * s; ctx.stroke();
+        const col = kind === "danger" ? "#ff6b6b" : kind === "mint" ? NAVY : "#c4ccd6";
+        ctx.fillStyle = col;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        fitFont(ctx, label.toUpperCase(), 600, getMono(), 11 * s, w - 12 * s);
+        ctx.fillText(label.toUpperCase(), x + w / 2, y + h / 2 + 0.5);
+        ctx.textAlign = "left";
+      }
+
+      function findingRow(ctx, x, y, w, name, meta, snippet, s) {
+        const headH = 46 * s;
+        const detailH = snippet ? 7 * s + 40 * s : 0;
+        const H = headH + detailH;
+        const g = ctx.createLinearGradient(x, y, x, y + H);
+        g.addColorStop(0, "rgba(9,24,48,0.7)");
+        g.addColorStop(1, "rgba(255,255,255,0.015)");
+        roundRect(ctx, x, y, w, H, 10 * s);
+        ctx.fillStyle = g; ctx.fill();
+        ctx.strokeStyle = "rgba(255,255,255,0.08)"; ctx.lineWidth = 1 * s; ctx.stroke();
+        // severity bar
+        ctx.save();
+        ctx.shadowColor = "rgba(114,255,255,0.45)"; ctx.shadowBlur = 8 * s;
+        roundRect(ctx, x + 14 * s, y + (headH - 20 * s) / 2, 3 * s, 20 * s, 1.5 * s);
+        ctx.fillStyle = CYAN; ctx.fill();
+        ctx.restore();
+        // name
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = "#f4f6f8";
+        ctx.font = `600 ${13 * s}px ${getMono()}`;
+        ctx.fillText(name, x + 26 * s, y + headH / 2);
+        // meta (right)
+        ctx.fillStyle = "#8b949e";
+        ctx.font = `400 ${12 * s}px ${getMono()}`;
+        ctx.textAlign = "right";
+        ctx.fillText(meta, x + w - 34 * s, y + headH / 2);
+        ctx.textAlign = "left";
+        // chevron
+        ctx.strokeStyle = snippet ? CYAN : "#5a626b";
+        ctx.lineWidth = 2 * s; ctx.lineCap = "round"; ctx.lineJoin = "round";
+        const chx = x + w - 22 * s, chy = y + headH / 2, cs = 5 * s;
+        ctx.beginPath();
+        if (snippet) { ctx.moveTo(chx - cs, chy + cs * 0.6); ctx.lineTo(chx, chy - cs * 0.6); ctx.lineTo(chx + cs, chy + cs * 0.6); }
+        else { ctx.moveTo(chx - cs, chy - cs * 0.6); ctx.lineTo(chx, chy + cs * 0.6); ctx.lineTo(chx + cs, chy - cs * 0.6); }
+        ctx.stroke();
+        // snippet box
+        if (snippet) {
+          const bx = x + 14 * s, by = y + headH - 2 * s, bw = w - 28 * s, bh = 34 * s;
+          roundRect(ctx, bx, by, bw, bh, 8 * s);
+          ctx.fillStyle = "#050505"; ctx.fill();
+          ctx.strokeStyle = "rgba(255,255,255,0.08)"; ctx.stroke();
+          ctx.fillStyle = "#c9d1d9"; ctx.font = `400 ${12 * s}px ${getMono()}`;
+          ctx.textBaseline = "middle";
+          ctx.save();
+          roundRect(ctx, bx, by, bw, bh, 8 * s); ctx.clip();
+          ctx.fillText(snippet, bx + 12 * s, by + bh / 2);
+          ctx.restore();
+        }
+      }
+
+      const DIALOG_BASE_H = 50 + 16 + 46 + 9 + 93 + 16 + 72; // == 302 (w=460)
+      function dialogHeight(w) { return (w / 460) * DIALOG_BASE_H; }
+
+      function drawDialog(ctx, x, y, w) {
+        const s = w / 460;
+        const H = dialogHeight(w);
+        // panel
+        const g = ctx.createLinearGradient(x, y, x, y + H);
+        g.addColorStop(0, "#0b0d11"); g.addColorStop(0.7, "#050507");
+        roundRect(ctx, x, y, w, H, 16 * s);
+        ctx.save();
+        ctx.shadowColor = "rgba(0,0,0,0.9)"; ctx.shadowBlur = 60 * s; ctx.shadowOffsetY = 24 * s;
+        ctx.fillStyle = g; ctx.fill();
+        ctx.restore();
+        ctx.strokeStyle = "rgba(255,255,255,0.1)"; ctx.lineWidth = 1 * s; ctx.stroke();
+        // top cyan hairline
+        const hair = ctx.createLinearGradient(x + 24 * s, 0, x + w - 24 * s, 0);
+        hair.addColorStop(0, "rgba(114,255,255,0)");
+        hair.addColorStop(0.5, "rgba(114,255,255,0.55)");
+        hair.addColorStop(1, "rgba(114,255,255,0)");
+        ctx.fillStyle = hair;
+        ctx.fillRect(x + 24 * s, y, w - 48 * s, Math.max(1, 1.4 * s));
+        // header
+        const lw = logo(ctx, x + 18 * s, y + 15 * s, 22 * s);
+        ctx.textBaseline = "alphabetic";
+        wordmark(ctx, x + 18 * s + lw + 8 * s, y + 33 * s, 14 * s);
+        ctx.fillStyle = "#5a626b"; ctx.font = `400 ${22 * s}px ${getSans()}`;
+        ctx.fillText("×", x + w - 30 * s, y + 36 * s);
+        // rule
+        ctx.fillStyle = "rgba(255,255,255,0.08)";
+        ctx.fillRect(x + 18 * s, y + 50 * s, w - 36 * s, Math.max(1, 1 * s));
+        // findings
+        let cy = y + 50 * s + 16 * s;
+        findingRow(ctx, x + 18 * s, cy, w - 36 * s, "AWS Access Key", "line 3 · 20 chars", null, s);
+        cy += 46 * s + 9 * s;
+        findingRow(ctx, x + 18 * s, cy, w - 36 * s, "GitHub Token", "line 7 · 40 chars", "ghp_••••••••••••••••••••••••••••", s);
+        cy += 93 * s + 16 * s;
+        // actions
+        ctx.fillStyle = "rgba(255,255,255,0.08)";
+        ctx.fillRect(x + 18 * s, cy, w - 36 * s, Math.max(1, 1 * s));
+        const btnY = cy + 14 * s, btnH = 40 * s, inner = w - 36 * s, gap = 8 * s;
+        const bw = (inner - 2 * gap) / 3;
+        dialogButton(ctx, x + 18 * s, btnY, bw, btnH, "Cancel", "ghost", s);
+        dialogButton(ctx, x + 18 * s + bw + gap, btnY, bw, btnH, "Paste anyway", "danger", s);
+        dialogButton(ctx, x + 18 * s + 2 * (bw + gap), btnY, bw, btnH, "Paste anonymously", "mint", s);
+      }
+
+      // UI example — the real warning popup over a dimmed AI-chat composer.
+      function drawUIExample(ctx, W, H) {
+        bg(ctx, W, H);
+        // faint mock composer near the bottom (the "page" behind the overlay)
+        ctx.save();
+        ctx.globalAlpha = 0.6;
+        const cbx = W * 0.06, cbw = W * 0.55, cbh = H * 0.14, cby = H - H * 0.11 - cbh;
+        roundRect(ctx, cbx, cby, cbw, cbh, 14);
+        ctx.fillStyle = "rgba(255,255,255,0.03)"; ctx.fill();
+        ctx.strokeStyle = "rgba(255,255,255,0.08)"; ctx.lineWidth = 1; ctx.stroke();
+        ctx.fillStyle = "#5a626b"; ctx.font = `400 ${H * 0.026}px ${getSans()}`;
+        ctx.fillText("Message ChatGPT…", cbx + 22, cby + cbh * 0.42);
+        ctx.fillStyle = "#3a4048"; ctx.font = `400 ${H * 0.022}px ${getMono()}`;
+        ctx.fillText("export AWS_SECRET_ACCESS_KEY=…", cbx + 22, cby + cbh * 0.75);
+        ctx.restore();
+        // dim scrim over the page
+        ctx.fillStyle = "rgba(4,5,7,0.58)";
+        ctx.fillRect(0, 0, W, H);
+
+        // headline (left)
+        const padX = W * 0.06;
+        ctx.textBaseline = "alphabetic";
+        const avail = W * 0.4;
+        let hf = fitFont(ctx, "before it leaks.", 750, getSans(), H * 0.082, avail);
+        ctx.font = `750 ${hf}px ${getSans()}`;
+        ctx.fillStyle = "#fff";
+        ctx.fillText("Stop the paste", padX, H * 0.42);
+        ctx.fillText("before it ", padX, H * 0.42 + hf * 1.06);
+        const wa = ctx.measureText("before it ").width;
+        ctx.fillStyle = CYAN;
+        ctx.fillText("leaks.", padX + wa, H * 0.42 + hf * 1.06);
+        ctx.fillStyle = "#aeb7c0";
+        ctx.font = `400 ${H * 0.03}px ${getSans()}`;
+        ctx.fillText("A warning fires the instant a secret is detected —", padX, H * 0.42 + hf * 1.06 + H * 0.09);
+        ctx.fillText("cancel, paste anyway, or paste anonymously.", padX, H * 0.42 + hf * 1.06 + H * 0.14);
+
+        // the popup (right), vertically centred
+        const dw = Math.min(W * 0.42, 560);
+        drawDialog(ctx, W - padX - dw, (H - dialogHeight(dw)) / 2, dw);
+      }
+
+      // ---- build cards -------------------------------------------------------
+      const SIZE = { w: 1280, h: 800 };
+      const BANNERS = [
+        { id: "hero", ...SIZE, name: "1 · Hero", layout: drawWide },
+        { id: "popup", ...SIZE, name: "2 · Warning popup (UI)", layout: drawUIExample },
+        { id: "features", ...SIZE, name: "3 · Features", layout: drawFeatures },
+        { id: "privacy", ...SIZE, name: "4 · Privacy", layout: drawPrivacy },
+      ];
+
+      const grid = document.getElementById("grid");
+      for (const b of BANNERS) {
+        const card = document.createElement("div");
+        card.className = "card";
+        const file = `secureintent-${b.id}-${b.w}x${b.h}.png`;
+        card.innerHTML =
+          `<div class="card-top"><div><span class="card-name">${b.name}</span> ` +
+          `<span class="card-dim">${b.w}×${b.h}</span></div>` +
+          `<button class="dl">Download PNG</button></div>` +
+          `<div class="stage"></div>`;
+        const canvas = document.createElement("canvas");
+        canvas.width = b.w;
+        canvas.height = b.h;
+        card.querySelector(".stage").appendChild(canvas);
+        grid.appendChild(card);
+
+        const ctx = canvas.getContext("2d");
+        b.layout(ctx, b.w, b.h);
+
+        const download = () => {
+          canvas.toBlob((blob) => {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = file;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+          }, "image/png");
+        };
+        canvas.addEventListener("click", download);
+        card.querySelector(".dl").addEventListener("click", download);
+      }
+
+      // Re-render once fonts settle, so Fira Code/Inter are used if installed.
+      if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(() => {
+          document.querySelectorAll(".card canvas").forEach((canvas, i) => {
+            const b = BANNERS[i];
+            b.layout(canvas.getContext("2d"), b.w, b.h);
+          });
+        });
+      }
+    </script>
+  </body>
+</html>

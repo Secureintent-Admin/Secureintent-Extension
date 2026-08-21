@@ -10,8 +10,11 @@ export function buildEvent(input: {
   source: string;
   signedIn: boolean;
   businessDomain: string | null;
+  orgId?: string | null;
+  actorId?: string | null;
 }): TelemetryEvent {
-  return { eventId: crypto.randomUUID(), ...input };
+  // Build-time browser flag from WXT (chrome | firefox | edge | opera | safari).
+  return { eventId: crypto.randomUUID(), browser: import.meta.env.BROWSER, ...input };
 }
 
 export function sendTelemetry(event: TelemetryEvent): void {

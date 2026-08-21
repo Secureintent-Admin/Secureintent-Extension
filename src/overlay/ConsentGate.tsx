@@ -1,26 +1,42 @@
+import { useEffect } from 'react';
 import { Logo } from '@/components/Logo';
 import { PRIVACY_URL, TOS_URL } from '@/lib/consent';
 
 export interface ConsentGateProps {
   /** Accept the current Terms & Privacy. */
   onAgree: () => void;
-  /** Dismiss without accepting — the paste stays blocked. */
+  /** Dismiss without accepting — this paste is discarded, nothing is inserted. */
   onCancel: () => void;
 }
 
 /**
  * Blocking consent gate shown on the first paste that would trigger a warning,
  * before the extension protects anything. Same closed-shadow overlay chrome as
- * the paste warning.
+ * the paste warning — including the same three ways out (Escape, the ×, a click
+ * on the scrim), because a dialog the user can't dismiss is a trap, and this one
+ * appears on top of their own work.
+ *
+ * Dismissing maps to the same outcome as the warning dialog's Cancel: the paste
+ * was already `preventDefault`-ed, so it is dropped. That is stated in the copy —
+ * a silently swallowed paste is what made this gate feel broken.
  */
 export function ConsentGate({ onAgree, onCancel }: ConsentGateProps) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onCancel();
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [onCancel]);
+
   return (
-    <div className="si-scrim">
+    <div className="si-scrim" onClick={onCancel}>
       <div
         className="si-hud si-consent"
         role="alertdialog"
         aria-modal="true"
         aria-label="Accept the Terms of Service and Privacy Policy to enable SecureIntent"
+        onClick={(e) => e.stopPropagation()}
       >
         <div className="si-top">
           <span className="si-brand">
@@ -29,6 +45,14 @@ export function ConsentGate({ onAgree, onCancel }: ConsentGateProps) {
               SecureIntent<span className="si-ai">.ai</span>
             </span>
           </span>
+          <button
+            type="button"
+            className="si-x"
+            aria-label="Dismiss — this paste is discarded"
+            onClick={onCancel}
+          >
+            &times;
+          </button>
         </div>
 
         <div className="si-rule" />
@@ -49,6 +73,11 @@ export function ConsentGate({ onAgree, onCancel }: ConsentGateProps) {
             </a>
           </p>
         </div>
+
+        <p className="si-consent-note">
+          Closing this discards the paste you just made — nothing is inserted and nothing is sent
+          anywhere. Copy it again once you've agreed.
+        </p>
 
         <div className="si-actions">
           <button type="button" className="si-btn si-btn-ghost" onClick={onCancel}>

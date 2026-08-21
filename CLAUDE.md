@@ -14,15 +14,23 @@ The end-to-end design:
   (closed so host pages can't inspect or tamper with it).
 - A **client-side pre-filter** does cheap detection on-device using a signed pattern bundle fetched
   from the Worker. The `killSwitch` field in the bundle can disable the guard remotely.
-- Worker → **Cloudflare Queue → ClickHouse** for telemetry. Pattern bundles are Ed25519-signed and
-  refreshed every 2 hours via a background alarm (and on popup demand).
+- Telemetry posts to the Worker, which inserts straight into **ClickHouse** (`ctx.waitUntil`; no Queue
+  yet). Pattern bundles are Ed25519-signed and refreshed every 2 hours via a background alarm (and on
+  popup demand).
 - **Raw pasted text never leaves the device** — only a salted SHA-256 fingerprint is sent. Treat this
   privacy boundary as a hard constraint in any code that touches paste content.
-- Cross-browser from one codebase: Chrome, Edge, Firefox, Opera.
+- Cross-browser from one codebase: Chrome, Edge, Firefox, Opera. Chrome ships MV3, Firefox MV2.
 
-The sibling `../backend` directory holds the Cloudflare Worker (Hono) that serves the signed config
-bundle (from `/v1/config`) and ingests telemetry (`/v1/telemetry`) to ClickHouse. The bundle is
-served from code (no DB); the signing private key is a Worker secret.
+### Sibling repos (each its own git remote, all part of one product)
+
+- `../backend` — Cloudflare Worker (Hono) at `api.secureintent.ai`: signed config bundle
+  (`/v1/config`), telemetry (`/v1/telemetry`), signed entitlement (`/v1/entitlement`), quota
+  (`/v1/usage`), Clerk/Paddle/promo. Has its own `CLAUDE.md`.
+- `../landing_page` — the static `secureintent.ai` site (marketing + `account.html`, the Clerk sign-in
+  / Paddle checkout page the extension links to). Has its own `CLAUDE.md`.
+
+Anything touching auth, entitlement, quota, or telemetry shape is a **two-repo change** — the Worker
+contract in `../backend/src/routes/` must move with it.
 
 ## Stack
 
@@ -38,8 +46,10 @@ rules in `semgrep/`. **Playwright** drives the live end-to-end suite in `e2e/`.
 ```bash
 pnpm dev            # dev server, Chrome target, HMR
 pnpm dev:firefox    # dev server, Firefox target
-pnpm build          # production build → .output/chrome-mv3/
+pnpm build          # production build → dist/chrome-mv3/ (outDir is dist, not .output)
+pnpm build:firefox  # → dist/firefox-mv2/
 pnpm zip            # packaged zip for store submission (Chrome)
+pnpm zip:firefox    # AMO zip (also emits a -sources.zip)
 pnpm compile        # tsc --noEmit — type-check
 pnpm lint           # biome lint
 pnpm check          # biome check (lint + format); check:fix to auto-fix
@@ -67,8 +77,19 @@ pnpm e2e:live          # live LLM sites (needs e2e:login session first)
 pnpm e2e:roundtrip     # anonymize → rehydrate vault roundtrip
 pnpm e2e:ghost         # large-log sanitization
 pnpm e2e:session-lock  # cloud-console PIN lock
+pnpm e2e:consent       # first-run Terms & Privacy gate
+pnpm e2e:install       # creator attribution on install (stub API on :8788, never prod)
 pnpm e2e:login         # one-time: capture a logged-in browser session
 ```
+
+`e2e:install` seeds the creator cookie into a profile, *then* loads the extension into
+it, so `onInstalled` fires with the cookie already present — the real ordering (click
+precedes install). Cookies seeded via `addCookies` need an explicit `expires`, or the
+profile drops them as session cookies on close.
+
+**Build-time env** (`.env`, WXT `WXT_`-prefixed, see `src/lib/clerkConfig.ts`):
+`WXT_CLERK_PUBLISHABLE_KEY` (auth is disabled entirely when empty), `WXT_CLERK_SYNC_HOST`
+(default `https://clerk.secureintent.ai`), `WXT_WEB_APP_URL` (default `https://secureintent.ai`).
 
 ## Code layout
 
@@ -93,8 +114,12 @@ src/
     fallback.content/index.ts   # catch-all guard on *://*/* — no-ops where a dedicated guard ran
                                 #   (shared window flag) so sites are never double-guarded
     sessionlock.content/index.ts# cloud-console PIN lock (AWS/GCP/Azure/CF/DO/Heroku/… consoles)
-    background.ts               # MV3 service worker: config sync alarm, badge bumps, vault opt-in
-    popup/                      # React popup: enable/pause, intercepted count, PIN setup, refresh
+    background.ts               # service worker (MV3) / background page (MV2): config sync alarm,
+                                #   badge bumps, vault opt-in, entitlement refresh + user-mismatch clear
+    popup/                      # React popup: enable/pause, intercepted count, PIN setup, refresh,
+                                #   AccountSection (plan + team + sign-in link), PlanCard (checklist,
+                                #   team seat, error+retry), PopupConsent, planFeatures
+    welcome/                    # first-run onboarding page + Terms & Privacy accept
   content/                      # paste-guard + session-lock logic (was src/lib/content/)
     createPasteGuard.ts         # paste capture → detect → fingerprint → overlay → insert/anon/cancel
     createSessionLock.ts        # inactivity/tab-away → PIN gate over high-risk consoles
@@ -118,13 +143,22 @@ src/
     api/client.ts               # getJson (no-store) + postJson (keepalive) + API_BASE
     telemetry/                  # TelemetryEvent types (build/send now live in services/)
     features/                   # internal feature-hook registry (registerFeature / notify*)
+    entitlement/                # signed entitlement: types, store, evaluateBlob/evaluateStored, refresh
+    quota/                      # Anonymise & Paste allowance: offline.ts (on-device) + backend routing
+                                #   + reset.ts (when the UTC-month allowance comes back)
+    consent/index.ts            # blocking Terms & Privacy gate (TERMS_VERSION, sync storage)
+    clerkConfig.ts              # publishable key, JWT template, sync host, ACCOUNT_URL, IS_FIREFOX
+    browserAction.ts            # browser.action (MV3) ?? browser.browserAction (MV2) shim
     badge.ts                    # per-tab intercepted-count toolbar badge
-    settings/index.ts           # enabled toggle, blocked count, session-lock config
     debug/index.ts              # siDebug / siError / elapsedMs structured console output
+  settings/index.ts             # enabled toggle, blocked count, session-lock config
   services/                     # I/O orchestration over pure lib modules
     configService.ts            # syncConfig: fetch /v1/config → validate → verify → persist if newer
     scheduler.ts                # SYNC_ALARM + handleRefreshMessage (popup-triggered sync)
     telemetryService.ts         # buildEvent (fresh UUID) + sendTelemetry (fire-and-forget POST)
+    entitlementBackground.ts    # Clerk token minting + entitlement refresh from the background
+    cookieToken.ts              # Firefox: read the Clerk `__session` cookie (SDK can't mint there)
+    installAttribution.ts       # report every install (creator optional) + arm the uninstall URL
   overlay/                      # React dialogs + closed-shadow-DOM mounts
     Overlay.tsx                 # paste warning: detections, masked snippets, 3 actions
     SessionLock.tsx / LockWarning.tsx
@@ -159,7 +193,7 @@ src/
 
 The warning dialog offers three outcomes, mapped to telemetry actions in `createPasteGuard`:
 
-- **paste** → `paste_clear` — insert the original text (for a large log, `sanitize()` scrubs it first).
+- **paste** → `paste_anyway` — insert the original text (for a large log, `sanitize()` scrubs it first).
 - **redact** → `paste_anonymously` — `tokenizeSecrets` replaces each secret with a `⟦SI:…⟧` token,
   inserts the masked text, and stores the `token → secret` entries in the **vault** so the destination
   can be rehydrated later in the same session.
@@ -193,6 +227,70 @@ still **source-available (view-only — see [LICENSE](LICENSE))**.
 - `src/core.ts` — internal API barrel that groups the reusable guard/overlay/detection exports. Retained
   as a convenience seam; it is **no longer an external publish target** (no `@secureintent/core` package,
   no `BUILD_TARGET=pro` build).
+
+### Auth (Clerk) — two different paths per browser
+
+There is no in-extension sign-in form; users sign in on the web app (`ACCOUNT_URL` →
+`secureintent.ai/account.html`) and the extension mirrors that session.
+
+- **Chrome/Edge/Opera (MV3):** `@clerk/chrome-extension` with `syncHost = https://clerk.secureintent.ai`
+  mints a **templated** session token (JWT template `secureintent`, carries `email` +
+  `public_metadata`). The manifest pins `key` so the `chrome-extension://` origin stays stable for
+  Clerk's allowed origins and the Worker's `CLERK_AUTHORIZED_PARTIES`.
+- **Firefox (MV2):** the SDK can't mint a token (its FAPI call comes from a random
+  `moz-extension://` origin Clerk can't allowlist), so `services/cookieToken.ts` reads the Clerk
+  `__session` cookie via `browser.cookies`. That default token has only `sub` — the Worker's
+  `hydrateClaims` fills email/metadata from the Clerk backend API. Requires the `cookies` permission
+  plus host permissions for both domains.
+- The entitlement blob is bound to a Clerk user id: `evaluateBlob` rejects a blob whose `clerkUserId`
+  doesn't match the live session, so a signed Pro blob can't be copied into another install. The
+  background clears a mismatched cache; content scripts skip the check and rely on that.
+
+### Anonymise & Paste quota (free tier)
+
+Free users get `OFFLINE_LIMIT` (10) anonymised pastes per UTC month. When the allowance is spent the
+overlay and the popup say so and name the reset date (`lib/quota/reset.ts`) rather than showing the
+same "· Pro" badge as a user who never had the feature. Signed out, the count lives
+on-device in `lib/quota/offline.ts` — deliberately obfuscated (XOR-folded token under an innocuous
+storage key) so it doesn't read as a plain counter; a UX gate, not a security boundary. Signed in, it
+routes to the Worker's `/v1/usage`, which reconciles the offline count forward with a MAX-only seed
+(`X-SI-Offline-Used`), so signing in never grants a fresh allowance. Pro is unlimited. Backend
+unreachable → fall back to the on-device count.
+
+### Counting installs and uninstalls
+
+`services/installAttribution.ts` reports **every** install to `POST /v1/install` — with the creator
+slug when a link put one in our cookie, without it otherwise. Organic installs are the denominator;
+dropping them leaves no way to tell a quiet week from a broken report. The payload is a random
+install id, the build (browser + version) and the coarse platform from `getPlatformInfo()` — never
+the arch, never anything about the person.
+
+Uninstalls come from `runtime.setUninstallURL`. Nothing of ours runs at removal, so the address is
+registered while the extension is alive — on install, at every startup, and again once the server's
+token arrives — and the browser opens it on the way out. `syncUninstallUrl()` is the only thing that
+sets it, and it *clears* it on Firefox until the Terms are accepted: that build promises AMO
+`data_collection_permissions: { required: ['none'] }`, and an armed ping is a report.
+
+### Consent gate
+
+`lib/consent` stores a `{ version, acceptedAt }` record in **sync** storage. Until the current
+`TERMS_VERSION` is accepted, the paste guard shows a consent gate on the first warning and the popup
+shows a consent screen; the `welcome/` page is the normal first-run accept path. Bump `TERMS_VERSION`
+to re-prompt everyone after a terms change. The gate is dismissable the same three ways as the
+warning dialog (Escape / × / scrim) and says what that costs: the paste it interrupted is dropped.
+
+### One upgrade destination
+
+Every upgrade CTA — the popup's Upgrade button and the overlay's locked Pro action (which posts
+`si-open-upgrade` to the background) — opens `ACCOUNT_URL`. The marketing `#tiers` section is for
+people who don't have the extension yet, so it's never an in-product CTA target.
+
+### Firefox / MV2 gotchas
+
+`browser.action` doesn't exist under MV2 — always go through `lib/browserAction.ts`. `wxt.config.ts`
+branches on `browser === 'firefox'` for `browser_specific_settings` (stable add-on id, `strict_min_version`
+115 for `storage.session`, and AMO's required `data_collection_permissions`) and drops the Chrome-only
+`key`. Gate any Chrome-only path on `IS_FIREFOX` from `lib/clerkConfig.ts`.
 
 ## WXT conventions
 

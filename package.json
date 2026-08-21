@@ -1,11 +1,11 @@
 {
   "name": "secureintent-extension",
-  "description": "Warns you before pasting API keys, tokens, or secrets into AI tools and other sites. On-device — your text never leaves the browser.",
+  "description": "Warns you before pasting API keys, tokens, or secrets into AI tools and other sites. On-device \u2014 your text never leaves the browser.",
   "private": true,
-  "version": "1.0.6",
+  "version": "1.0.11",
   "type": "module",
   "license": "UNLICENSED",
-  "//core": "src/core.ts is an internal API barrel that groups the reusable guard/overlay/detection exports. No open-core split — this is a single extension with free and paid tiers (paid features gated at runtime by a signed entitlement). Not published as a package; stays private.",
+  "//core": "src/core.ts is an internal API barrel that groups the reusable guard/overlay/detection exports. No open-core split \u2014 this is a single extension with free and paid tiers (paid features gated at runtime by a signed entitlement). Not published as a package; stays private.",
   "exports": {
     ".": "./src/core.ts"
   },
@@ -33,6 +33,7 @@
     "e2e:ghost": "WXT_E2E=1 pnpm build && playwright test e2e/ghost.spec.ts",
     "e2e:session-lock": "WXT_E2E=1 pnpm build && playwright test e2e/session-lock.spec.ts",
     "e2e:consent": "WXT_E2E=1 pnpm build && playwright test e2e/consent.spec.ts",
+    "e2e:install": "WXT_E2E=1 WXT_API_BASE=http://localhost:8788 pnpm build && playwright test e2e/install-attribution.spec.ts",
     "e2e:report": "playwright show-report",
     "postinstall": "wxt prepare"
   },

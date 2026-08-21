@@ -2,6 +2,8 @@ import { browser } from '#imports';
 import type { EntitlementSnapshot } from '@/lib/entitlement';
 import { OFFLINE_LIMIT, offlineConsume, offlineUsed } from './offline';
 
+export { formatQuotaReset, quotaResetAt } from './reset';
+
 export interface QuotaStatus {
   used: number;
   remaining: number; // -1 when unlimited

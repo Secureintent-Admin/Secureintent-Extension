@@ -295,6 +295,62 @@
 .si-plan-upgrade:hover {
   filter: brightness(1.08);
 }
+/* Team seat: who provides this plan, and who to ask about it. */
+.si-plan-org {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--si-muted);
+}
+.si-plan-org b {
+  color: var(--si-text);
+  font-weight: 600;
+}
+/* The team's own detection rules are in force. Deliberately understated: one
+   line with a small outlined chip, only ever shown when the bundle has some. */
+.si-plan-team-rules {
+  margin: 6px 0 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--si-muted);
+}
+.si-plan-team-chip {
+  flex: 0 0 auto;
+  font-family: var(--si-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  color: var(--si-cyan);
+  background: rgba(114, 255, 255, 0.1);
+  border: 1px solid rgba(114, 255, 255, 0.35);
+  padding: 1px 7px;
+  border-radius: 999px;
+}
+/* Plan couldn't be read at all — visible, and retryable. */
+.si-plan-error {
+  margin: 8px 0 0;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--si-muted);
+}
+.si-plan-retry {
+  margin-top: 8px;
+  padding: 5px 12px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--si-text);
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--si-border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.si-plan-retry:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
 .si-plan-list {
   list-style: none;
   margin: 0;
@@ -387,7 +443,7 @@
   color: var(--si-muted);
   white-space: nowrap;
 }
-/* Live features read in cyan; upcoming ones stay muted / dimmed. */
+/* Included features read in cyan; locked ones stay muted with a cyan CTA. */
 .si-feat--active .si-feat-ic,
 .si-feat--usage .si-feat-ic {
   color: var(--si-cyan);
@@ -403,12 +459,6 @@
 }
 .si-feat--locked .si-feat-state {
   color: var(--si-cyan);
-}
-.si-feat--upcoming {
-  opacity: 0.55;
-}
-.si-feat--upcoming .si-feat-ic {
-  color: var(--si-faint);
 }
 
 /* Config row (subtle) ----------------------------------------------------- */
@@ -772,6 +822,13 @@
 .si-lockcfg-note.is-error {
   color: var(--si-danger);
 }
+/* Team Policy Sync: the lock is pinned on by the workspace admin */
+.si-lockcfg-note.is-enforced {
+  color: var(--si-cyan);
+}
+.si-lockcfg-note.is-enforced.is-error {
+  color: var(--si-danger);
+}
 
 /* --- Profile bar (top of popup; opens the standalone account tab) --- */
 .si-profile-wrap {
@@ -1027,4 +1084,59 @@
   opacity: 0.4;
   background: rgba(255, 255, 255, 0.07);
   color: var(--si-muted);
+}
+
+/* Team console shortcut under the profile row (org admins only). */
+.si-team-link {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  margin-top: 6px;
+  padding: 7px 10px;
+  border: 1px solid rgba(114, 255, 255, 0.28);
+  border-radius: 10px;
+  background: rgba(114, 255, 255, 0.06);
+  color: #72ffff;
+  font: 600 11.5px / 1 inherit;
+  cursor: pointer;
+}
+.si-team-link:hover {
+  background: rgba(114, 255, 255, 0.12);
+}
+.si-team-link svg {
+  margin-left: auto;
+}
+
+/* Plan lookup failed — say so where the plan is shown, and offer a way out. */
+.si-account-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  margin-top: 6px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 107, 107, 0.3);
+  border-radius: 10px;
+  background: rgba(255, 107, 107, 0.08);
+}
+.si-account-error-text {
+  flex: 1;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--si-muted);
+}
+.si-account-retry {
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--si-text);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--si-border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.si-account-retry:hover {
+  background: rgba(255, 255, 255, 0.14);
 }

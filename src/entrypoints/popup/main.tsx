@@ -2,7 +2,7 @@ import { ClerkProvider } from '@clerk/chrome-extension';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { browser } from '#imports';
-import { CLERK_PUBLISHABLE_KEY, CLERK_SYNC_HOST, isClerkConfigured } from '@/lib/clerkConfig';
+import { CLERK_PUBLISHABLE_KEY, CLERK_SYNC_HOST, isClerkSdkEnabled } from '@/lib/clerkConfig';
 import App from './App.tsx';
 import './style.css';
 
@@ -11,7 +11,7 @@ const root = ReactDOM.createRoot(document.getElementById('root')!);
 
 // Without a publishable key (dev before Clerk is set up) render the app without
 // auth so the rest of the popup still works.
-if (isClerkConfigured()) {
+if (isClerkSdkEnabled()) {
   root.render(
     <React.StrictMode>
       <ClerkProvider

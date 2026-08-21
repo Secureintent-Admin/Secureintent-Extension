@@ -1,8 +1,11 @@
-export const API_BASE = 'https://api.secureintent.ai';
+// Production by default. Override at build time to point a local build at a
+// `wrangler dev` Worker, so testing never writes into the live database:
+//   WXT_API_BASE=http://localhost:8787 pnpm build
+export const API_BASE = import.meta.env.WXT_API_BASE ?? 'https://api.secureintent.ai';
 
-export async function getJson<T>(path: string): Promise<T> {
+export async function getJson<T>(path: string, headers?: Record<string, string>): Promise<T> {
   // no-store: config must never come from the HTTP cache (always latest bundle)
-  const res = await fetch(`${API_BASE}${path}`, { cache: 'no-store' });
+  const res = await fetch(`${API_BASE}${path}`, { cache: 'no-store', headers });
   if (!res.ok) throw new Error(`GET ${path} failed: ${res.status}`);
   return (await res.json()) as T;
 }

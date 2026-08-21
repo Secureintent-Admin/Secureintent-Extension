@@ -1,9 +1,12 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
 
-// Confirms the upgrade CTA opens the pricing / tiers page (not Paddle checkout).
-// A free user's Ghost "Sanitize & paste" is Pro-locked; clicking it should open
-// https://secureintent.ai/#tiers. Needs the open e2e shadow build (WXT_E2E=1).
+// Confirms the upgrade CTA opens the account page — the one destination for the
+// "upgrade" intent, and the only one that does anything for someone who already
+// has the extension installed (the marketing #tiers card just says "Install
+// SecureIntent"). A free user's Ghost "Sanitize & paste" is Pro-locked; clicking
+// it should open https://secureintent.ai/account.html. Needs the open e2e shadow
+// build (WXT_E2E=1).
 
 const SECRET = `sk-${'a'.repeat(30)}`;
 const SITE = 'https://example.com/';
@@ -14,10 +17,10 @@ async function paste(page: Page, text: string): Promise<void> {
   await page.keyboard.press('ControlOrMeta+V');
 }
 
-test('overlay "Pro" upgrade opens the tiers page', async ({ context }) => {
+test('overlay "Pro" upgrade opens the account page', async ({ context }) => {
   // Stub the web app so the opened tab loads without hitting the network.
   await context.route('https://secureintent.ai/**', (route) =>
-    route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>tiers</title>' }),
+    route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>account</title>' }),
   );
 
   const page = await context.newPage();
@@ -32,9 +35,10 @@ test('overlay "Pro" upgrade opens the tiers page', async ({ context }) => {
   const overlay = page.locator('secureintent-overlay');
   await expect(overlay).toBeAttached({ timeout: 5_000 });
 
-  const tiersTab = context.waitForEvent('page');
+  const accountTab = context.waitForEvent('page');
   await overlay.getByRole('button', { name: /Pro/ }).click();
-  const tab = await tiersTab;
+  const tab = await accountTab;
   expect(tab.url()).toContain('secureintent.ai');
-  expect(tab.url()).toContain('#tiers');
+  expect(tab.url()).toContain('account.html');
+  expect(tab.url()).not.toContain('#tiers');
 });

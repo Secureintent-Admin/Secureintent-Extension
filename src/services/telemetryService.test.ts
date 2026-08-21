@@ -50,6 +50,7 @@ const ev = {
   eventId: 'e1',
   site: 'ChatGPT',
   policyVersion: 0,
+  browser: 'chrome',
   detections: [
     {
       fingerprint: 'a'.repeat(64) as Fingerprint,
