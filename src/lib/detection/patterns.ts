@@ -137,7 +137,15 @@ export const PATTERNS: Pattern[] = [
   {
     type: 'env-credential',
     label: 'Credential assignment',
-    regex: /\b(?:secret|token|password|passwd|api[_-]?key|access[_-]?key)\s*=\s*\S{6,}/gi,
+    // `\b` alone catches PASSWORD= but not DB_PASSWORD=: an underscore is a word
+    // character, so there is no boundary between `_` and `PASSWORD`. The leading
+    // `[A-Za-z0-9_]*` fixes that, and the optional trailing key picks up
+    // SECRET_KEY without a general wildcard, which would fire on
+    // MAX_TOKENS=1000000. Keep in step with configBundle.ts in the backend: the
+    // served bundle overrides this, and this is what a fresh install uses until
+    // its first sync.
+    regex:
+      /\b[A-Za-z0-9_]*(?:secret|token|password|passwd|api[_-]?key|access[_-]?key)(?:[_-]?key)?\s*=\s*\S{6,}/gi,
   },
   {
     // only flagged with its label — a bare 40-char base64 string is indistinguishable from a hash

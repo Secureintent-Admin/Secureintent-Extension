@@ -345,3 +345,34 @@ describe('detectSecrets — the static catalogue never carries an origin', () =>
     expect('origin' in dets[0]).toBe(false);
   });
 });
+
+/**
+ * Beta testing found every prefixed credential name passing straight through:
+ * PASSWORD= was caught, DB_PASSWORD= was not. An underscore is a word character,
+ * so `\b` finds no boundary between `_` and `PASSWORD`.
+ */
+describe('prefixed credential names', () => {
+  const found = (text: string) => detectSecrets(text);
+
+  test.each([
+    'DB_PASSWORD=hunter2xyz',
+    'REDIS_PASSWORD=abcdefgh',
+    'CLIENT_SECRET=abcdefgh',
+    'JWT_SECRET=abcdefgh',
+    'SESSION_SECRET=abcdefgh',
+    'ACCESS_TOKEN=abcdefgh',
+    'REFRESH_TOKEN=abcdefgh',
+    'STRIPE_API_KEY=abcdefghij',
+    'SECRET_KEY=django-insecure-abc',
+  ])('catches %s', (sample) => {
+    expect(found(sample).length).toBeGreaterThan(0);
+  });
+
+  test.each([
+    'TOKEN_COUNT=1000000',
+    'MAX_TOKENS=1000000',
+    'PASSWORD_HASH=abcdefgh',
+  ])('leaves %s alone — these are everywhere in AI tooling config', (sample) => {
+    expect(found(sample)).toHaveLength(0);
+  });
+});
