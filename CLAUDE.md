@@ -117,6 +117,8 @@ src/
     fallback.content/index.ts   # catch-all guard on *://*/* — no-ops where a dedicated guard ran
                                 #   (shared window flag) so sites are never double-guarded
     sessionlock.content/index.ts# cloud-console PIN lock (AWS/GCP/Azure/CF/DO/Heroku/… consoles)
+    bridge.content/index.ts     # reports the focused tab's host/port to the desktop bridge
+                                #   (opt-in, off by default) — see "Desktop bridge" below
     background.ts               # service worker (MV3) / background page (MV2): config sync alarm,
                                 #   badge bumps, vault opt-in, entitlement refresh + user-mismatch clear
     popup/                      # React popup: enable/pause, intercepted count, PIN setup, refresh,
@@ -151,6 +153,9 @@ src/
                                 #   + reset.ts (when the UTC-month allowance comes back)
     consent/index.ts            # blocking Terms & Privacy gate (TERMS_VERSION, sync storage)
     clerkConfig.ts              # publishable key, JWT template, sync host, ACCOUNT_URL, IS_FIREFOX
+    bridge/                     # desktop-agent bridge: types (protocol), hash (FNV-1a, matches
+                                #   the agent's content_hash), client (connect-per-burst over
+                                #   ws://127.0.0.1, port scan 8137–8141)
     browserAction.ts            # browser.action (MV3) ?? browser.browserAction (MV2) shim
     badge.ts                    # per-tab intercepted-count toolbar badge
     debug/index.ts              # siDebug / siError / elapsedMs structured console output
@@ -287,6 +292,37 @@ warning dialog (Escape / × / scrim) and says what that costs: the paste it inte
 Every upgrade CTA — the popup's Upgrade button and the overlay's locked Pro action (which posts
 `si-open-upgrade` to the background) — opens `ACCOUNT_URL`. The marketing `#tiers` section is for
 people who don't have the extension yet, so it's never an in-product CTA target.
+
+### Desktop bridge (opt-in)
+
+The SecureIntent **desktop app** also watches the clipboard, so without coordination both
+products warn about the same copy. The bridge is how they avoid that. It is **off by default**
+and needs a pairing token, so an unpaired browser never opens a local port.
+
+- `bridge.content` (all pages, `document_idle`) reports the **focused tab's host and port** to
+  the background, debounced 250ms and only when they actually change — a content script reads its
+  own address with no permission, whereas watching tabs from the background would need `tabs` and a
+  listing that declares it reads browsing history.
+- The background sends two messages over `ws://127.0.0.1:<port>`:
+  `browser_url` (so the agent can recognise a local dev server) and `handled` (so it doesn't raise
+  its own alert for a copy we already warned about).
+- **Connect-per-burst, never held open.** An MV3 worker is killed after ~30s idle, so a held socket
+  dies with it; keeping it alive would mean a keepalive forever and a permanently resident worker.
+- **Pairing is a token pasted into the popup**, copied from the desktop app's dashboard. There is no
+  HTTP handout: the agent's local API is `/health` + `/scan` only, `/scan` already requires the
+  token, and it sends no CORS headers — so a `fetch` would be discarded. WebSockets have no CORS,
+  which is why this needs **no host permission**.
+- Discovery is authentication: the first port in **8137–8141** that answers the handshake with
+  `welcome: true`. A squatter can't fake that without the token.
+
+Two things that will bite anyone changing this:
+
+- **`browser_url` must carry `url`.** The agent's `BrowserUrl` variant has a single `url` field and
+  drops a frame it can't deserialise *in silence*. `url` is the **origin only** — a path or query
+  would leak session tokens. `host`/`port`/`ts` ride along because the agent ignores unknown fields.
+- **The `handled` hash is a u64 and must not pass through a JS number.** It exceeds
+  `Number.MAX_SAFE_INTEGER`, so `JSON.stringify` corrupts it (…433931 → …434000) and every dedup
+  misses silently. `lib/bridge/hash.ts` builds that frame by hand; there is a test asserting it.
 
 ### Firefox / MV2 gotchas
 

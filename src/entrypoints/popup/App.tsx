@@ -6,6 +6,7 @@ import { isConsentAccepted } from '@/lib/consent';
 import { blockedCountItem, isEnabled } from '@/settings';
 import './App.css';
 import { AccountSection } from './AccountSection';
+import { BridgeSettings } from './BridgeSettings';
 import { PlanCard } from './PlanCard';
 import { PopupConsent } from './PopupConsent';
 import { type ProtectionStatus, protectionStatus } from './protection';
@@ -172,6 +173,7 @@ function App() {
       <PlanCard />
 
       <SessionLockSettings />
+      <BridgeSettings />
 
       <div className="si-config">
         <span className="si-config-label">

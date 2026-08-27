@@ -1,5 +1,6 @@
 import { browser, defineBackground } from '#imports';
 import { bumpBadge, clearBadge } from '@/lib/badge';
+import { sendBrowserUrl, sendHandledHash } from '@/lib/bridge/client';
 import { browserAction } from '@/lib/browserAction';
 import { ACCOUNT_URL } from '@/lib/clerkConfig';
 import { consentItem, isConsentAccepted } from '@/lib/consent';
@@ -13,6 +14,7 @@ import {
 } from '@/services/entitlementBackground';
 import { markInstallPending, reportInstall, syncUninstallUrl } from '@/services/installAttribution';
 import { handleRefreshMessage, SYNC_ALARM } from '@/services/scheduler';
+import { isBridgeEnabled } from '@/settings';
 
 const WELCOME_URL = '/welcome.html';
 
@@ -95,6 +97,36 @@ export default defineBackground(() => {
     // button opens ACCOUNT_URL directly — same destination, no message needed.)
     if (type === 'si-open-upgrade') {
       browser.tabs.create({ url: ACCOUNT_URL }).catch(() => {});
+      return false;
+    }
+    // A content script says where its focused tab is. Pass it to the desktop
+    // agent so it can tell a local dev server from a real destination. Nothing
+    // waits on the answer: the bridge is an optimisation, and a machine with no
+    // agent on it is the normal case rather than a fault.
+    if (type === 'si-bridge-url') {
+      const { host, port, scheme } = msg as {
+        host?: string;
+        port?: number | null;
+        scheme?: string;
+      };
+      if (typeof host === 'string' && host) {
+        isBridgeEnabled()
+          .then((on) =>
+            on ? sendBrowserUrl(host, port ?? null, scheme === 'https' ? 'https' : 'http') : false,
+          )
+          .catch(() => false);
+      }
+      return false;
+    }
+    // We showed a warning for this copy, so the desktop should stay quiet about
+    // it. Fire-and-forget: the paste has already been dealt with either way.
+    if (type === 'si-bridge-handled') {
+      const { hash } = msg as { hash?: string };
+      if (typeof hash === 'string' && hash) {
+        isBridgeEnabled()
+          .then((on) => (on ? sendHandledHash(hash) : false))
+          .catch(() => false);
+      }
       return false;
     }
     // User accepted Terms & Privacy (welcome page or popup) → clear the nag badge.

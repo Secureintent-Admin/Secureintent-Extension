@@ -94,3 +94,37 @@ export async function recordBlocked(n: number): Promise<void> {
   const current = await blockedCountItem.getValue();
   await blockedCountItem.setValue(current + n);
 }
+
+// --- Desktop bridge (SecureIntent desktop agent) ---
+
+/**
+ * Off unless the person turns it on.
+ *
+ * The bridge tells a local agent which host the focused tab is on, so one copy
+ * isn't warned about twice. That is website activity leaving the browser, even
+ * though it only travels to another process on the same machine, so it is a
+ * choice rather than a default — and the agent has to work correctly for the
+ * many people who never enable it.
+ */
+export const bridgeEnabledItem = storage.defineItem<boolean>('local:si_bridge_enabled', {
+  fallback: false,
+});
+
+export const isBridgeEnabled = () => bridgeEnabledItem.getValue();
+export const setBridgeEnabled = (value: boolean) => bridgeEnabledItem.setValue(value);
+
+/**
+ * The desktop app's pairing token, copied from its dashboard.
+ *
+ * Typed in rather than fetched because there is nothing to fetch it from: the
+ * desktop's local API exposes only `/health` and `/scan`, `/scan` already needs
+ * this token, and neither sends CORS headers — so a browser would discard the
+ * response even if a handout existed. The dashboard shows the token and the
+ * endpoint side by side, which makes copying it the shortest honest path.
+ */
+export const bridgeTokenItem = storage.defineItem<string | null>('local:si_bridge_token', {
+  fallback: null,
+});
+
+export const setBridgeToken = (value: string | null) =>
+  bridgeTokenItem.setValue(value?.trim() || null);

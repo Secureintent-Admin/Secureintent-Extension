@@ -1,4 +1,5 @@
 import { browser, type ContentScriptContext, storage } from '#imports';
+import { contentHash } from '@/lib/bridge/hash';
 import { DEFAULT_BUNDLE, getActiveBundle, getPolicy, isBlockedHost } from '@/lib/config';
 import { acceptTerms, consentItem, consentSatisfied, isConsentAccepted } from '@/lib/consent';
 import { elapsedMs, siDebug, siError } from '@/lib/debug';
@@ -370,6 +371,14 @@ export async function createPasteGuard(
                 );
               }
               notifyAction({ ...featureCtx, action }); // pro: audit log / team report
+              // We showed a warning for this copy, so the desktop app — if the
+              // person runs it and has paired it — should not raise its own for
+              // the same one. Only the hash travels, computed here so the pasted
+              // text never crosses between extension contexts, and the background
+              // drops it entirely when the bridge is off.
+              browser.runtime
+                .sendMessage({ type: 'si-bridge-handled', hash: contentHash(text).toString() })
+                .catch(() => {});
               if (!ghostMode && action !== 'sanitize' && fingerprintsPromise) {
                 // A refused "paste" inserted nothing, so it is reported as
                 // cancelled — never as paste_anyway, which would tell the team's
