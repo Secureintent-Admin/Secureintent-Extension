@@ -13,14 +13,34 @@ describe('validateBundle', () => {
       false,
     );
   });
-  test('rejects a pattern with an unknown type or missing regex', () => {
-    const bad = {
+  test('accepts a type this build has never heard of', () => {
+    // Deliberate, and it is the whole reason a new secret type can ship at all.
+    // Rejecting here fails the WHOLE bundle, so the day the Worker first served
+    // `high-entropy` every installed copy would have thrown the bundle away and
+    // quietly stopped taking pattern updates — permanently, because the fix
+    // travels in the bundle it can no longer read. An unfamiliar type now costs
+    // that one pattern its rank (TYPE_RANK falls back to lowest) and no more.
+    const future = {
       version: 1,
-      patterns: [{ type: 'nope', label: 'x', regex: 'a' }],
+      patterns: [{ type: 'some-future-type', label: 'x', regex: 'a' }],
       sites: {},
       killSwitch: false,
     };
-    expect(validateBundle(bad)).toBe(false);
+    expect(validateBundle(future)).toBe(true);
+  });
+
+  test('still rejects a type that is missing or not a string', () => {
+    const base = { version: 1, sites: {}, killSwitch: false };
+    expect(validateBundle({ ...base, patterns: [{ label: 'x', regex: 'a' }] })).toBe(false);
+    expect(validateBundle({ ...base, patterns: [{ type: '', label: 'x', regex: 'a' }] })).toBe(
+      false,
+    );
+    expect(validateBundle({ ...base, patterns: [{ type: 7, label: 'x', regex: 'a' }] })).toBe(
+      false,
+    );
+  });
+
+  test('rejects a pattern with a missing regex', () => {
     const bad2 = {
       version: 1,
       patterns: [{ type: 'known-key', label: 'x' }],
@@ -57,11 +77,19 @@ describe('validateBundle — team policy', () => {
     ).toBe(false);
   });
 
-  test('rejects a policy whose extraPatterns or blockedSites are malformed', () => {
+  test('a policy survives an unfamiliar pattern type but not a malformed one', () => {
     expect(
       validateBundle({
         ...DEFAULT_BUNDLE,
         policy: { ...policy, extraPatterns: [{ type: 'nope', label: 'x', regex: 'a' }] },
+      }),
+      // A team's own pattern gets the same forward-compatibility as ours: an
+      // unfamiliar type is not a reason to drop the whole policy.
+    ).toBe(true);
+    expect(
+      validateBundle({
+        ...DEFAULT_BUNDLE,
+        policy: { ...policy, extraPatterns: [{ label: 'x', regex: 'a' }] },
       }),
     ).toBe(false);
     expect(

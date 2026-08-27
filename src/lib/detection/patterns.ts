@@ -15,6 +15,9 @@ export const TYPE_RANK: Record<SecretType, number> = {
   pii: 3,
   'known-key': 2,
   'env-credential': 1,
+  // Lowest on purpose. This one fires because nothing matched, so where it
+  // overlaps a detector that did recognise the format, the named one wins.
+  'high-entropy': 0,
 };
 
 export const PATTERNS: Pattern[] = [
@@ -161,13 +164,13 @@ export const PATTERNS: Pattern[] = [
   },
   // Aggressive: unknown/zero-day secrets by entropy. Gated by bundle.aggressive.
   {
-    type: 'known-key',
+    type: 'high-entropy',
     label: 'High-entropy hex string',
     regex: /\b[0-9a-fA-F]{32,}\b/g,
     validate: 'entropy',
   },
   {
-    type: 'known-key',
+    type: 'high-entropy',
     label: 'High-entropy base64 string',
     regex: /[A-Za-z0-9+/]{32,}={0,2}/g,
     validate: 'entropy',

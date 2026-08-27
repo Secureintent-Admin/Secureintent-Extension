@@ -1,6 +1,6 @@
 import type { Pattern } from './patterns';
 import { PATTERNS, TYPE_RANK } from './patterns';
-import type { Detection } from './types';
+import type { Detection, SecretType } from './types';
 import { validateMatch } from './validators';
 
 export { compilePatterns, type RawPattern } from './compile';
@@ -69,8 +69,13 @@ export function detectSecrets(text: string, patterns: Pattern[] = PATTERNS): Det
   }
 
   // Resolve overlaps: prefer higher rank, then longer match.
+  //
+  // A type this build doesn't know ranks lowest rather than producing NaN. The
+  // bundle validator accepts unfamiliar types so a new one never invalidates a
+  // whole bundle, which only works if the ranking survives seeing one.
+  const rankOf = (t: string) => TYPE_RANK[t as SecretType] ?? 0;
   raw.sort((a, b) => {
-    const rank = TYPE_RANK[b.type] - TYPE_RANK[a.type];
+    const rank = rankOf(b.type) - rankOf(a.type);
     if (rank !== 0) return rank;
     return b.end - b.start - (a.end - a.start);
   });

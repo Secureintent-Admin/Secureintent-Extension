@@ -1,13 +1,26 @@
 import type { ConfigBundle } from './types';
 
-const TYPES = new Set(['known-key', 'private-key', 'env-credential', 'pii']);
+/**
+ * Types this build knows how to rank. A pattern carrying anything else is still
+ * accepted — see below.
+ */
+const TYPES = new Set(['known-key', 'private-key', 'env-credential', 'pii', 'high-entropy']);
 
 function validPattern(v: unknown): boolean {
   if (typeof v !== 'object' || v === null) return false;
   const p = v as Record<string, unknown>;
   if (typeof p.regex !== 'string' || p.regex.length === 0) return false;
   if (typeof p.label !== 'string') return false;
-  if (!TYPES.has(p.type as string)) return false;
+  // Any non-empty string is accepted, not just the list above.
+  //
+  // This used to reject, and rejecting is what makes adding a type expensive:
+  // `validateBundle` fails the WHOLE bundle on one bad pattern, so the day we
+  // first served `high-entropy` every already-installed copy would have thrown
+  // the bundle away and quietly stopped taking pattern updates altogether —
+  // permanently, since the fix ships in the bundle it can no longer read.
+  // An unrecognised type now costs that one pattern its rank (see TYPE_RANK
+  // lookups, which fall back to lowest) and nothing else.
+  if (typeof p.type !== 'string' || p.type.length === 0) return false;
   if (p.validate !== undefined && typeof p.validate !== 'string') return false;
   return true;
 }
