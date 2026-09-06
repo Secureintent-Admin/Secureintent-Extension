@@ -23,23 +23,33 @@ function categoryFor(label: string): string {
 export function sanitize(text: string, detections: Detection[]): string {
   if (detections.length === 0) return text;
 
+  const byStart = [...detections].sort((a, b) => a.start - b.start);
+
   // First pass (left-to-right): assign a stable placeholder to each distinct value.
   const counters: Record<string, number> = {};
   const tokenByValue = new Map<string, string>();
-  for (const d of [...detections].sort((a, b) => a.start - b.start)) {
+  for (const d of byStart) {
     if (tokenByValue.has(d.match)) continue;
     const cat = categoryFor(d.label);
     counters[cat] = (counters[cat] ?? 0) + 1;
     tokenByValue.set(d.match, `[#${cat.toUpperCase()}_${counters[cat]}#]`);
   }
 
-  // Second pass (right-to-left): splice so earlier offsets stay valid.
-  let out = text;
-  for (const d of [...detections].sort((a, b) => b.start - a.start)) {
-    const token = tokenByValue.get(d.match) as string;
-    out = out.slice(0, d.start) + token + out.slice(d.end);
+  // Second pass: emit the untouched spans and the placeholders in order, then
+  // join once. Splicing the whole string per finding instead (`out.slice(0, …) +
+  // token + out.slice(…)`) copies the entire paste on every iteration, which is
+  // quadratic — a 2MB log with 40k findings took ~11s and froze the tab.
+  const parts: string[] = [];
+  let cursor = 0;
+  for (const d of byStart) {
+    // detectSecrets resolves overlaps before we get here, so this only guards
+    // against a caller passing an overlapping set: keep the earlier finding.
+    if (d.start < cursor) continue;
+    parts.push(text.slice(cursor, d.start), tokenByValue.get(d.match) as string);
+    cursor = d.end;
   }
-  return out;
+  parts.push(text.slice(cursor));
+  return parts.join('');
 }
 
 /**
