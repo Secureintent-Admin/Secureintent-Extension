@@ -2,10 +2,11 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
 import { type BundlePolicy, DEFAULT_BUNDLE, saveBundle } from '@/lib/config';
 import { acceptTerms, consentItem } from '@/lib/consent';
+import { consumeAnonymize, getAnonymizeStatus } from '@/lib/quota';
 import type { OverlayAction } from '@/overlay/Overlay';
 import * as telemetryService from '@/services/telemetryService';
 import { getBlockedCount, setEnabled } from '@/settings';
-import { createPasteGuard } from './createPasteGuard';
+import { ASYNC_PASTE_CHARS, createPasteGuard, MAX_PASTE_CHARS } from './createPasteGuard';
 
 // Mock the shadow-DOM overlay: capture props, return a fake handle.
 const { mountOverlayMock } = vi.hoisted(() => ({ mountOverlayMock: vi.fn() }));
@@ -14,6 +15,13 @@ vi.mock('../overlay/mount', () => ({ mountOverlay: mountOverlayMock }));
 // Mock the consent gate mount (closed shadow DOM can't render in jsdom).
 const { mountConsentGateMock } = vi.hoisted(() => ({ mountConsentGateMock: vi.fn() }));
 vi.mock('../overlay/mountConsentGate', () => ({ mountConsentGate: mountConsentGateMock }));
+const { mountPasteStatusMock } = vi.hoisted(() => ({ mountPasteStatusMock: vi.fn() }));
+vi.mock('../overlay/mountPasteStatus', () => ({ mountPasteStatus: mountPasteStatusMock }));
+
+beforeEach(() => {
+  mountPasteStatusMock.mockReset();
+  mountPasteStatusMock.mockResolvedValue({ remove: vi.fn(), update: vi.fn() });
+});
 
 // Mock the entitlement gate. Default: pro unlocked (existing behavior tests).
 // proRef.value → ghost gating (hasFeatureCached). anonRef.value → anonymise
@@ -86,11 +94,12 @@ function setup() {
     input,
     start: () => createPasteGuard(ctx as never, { name: 'ChatGPT', siteKey: 'chatgpt' }),
     firePaste: (e: ReturnType<typeof makeEvent>) => handlers.paste?.(e),
+    editInput: () => handlers.input?.({ composedPath: () => composedPathFrom(input) }),
     makeEvent,
   };
 }
 
-function lastOnAction(): (a: OverlayAction) => void {
+function lastOnAction(): (a: OverlayAction) => Promise<void> {
   return mountOverlayMock.mock.calls.at(-1)![1].onAction;
 }
 
@@ -190,6 +199,174 @@ describe('createPasteGuard', () => {
     await vi.waitFor(async () => expect(await getBlockedCount()).toBe(2));
   });
 
+  test('a second paste is cancelled while the warning remains open', async () => {
+    const t = setup();
+    await t.start();
+    await t.firePaste(t.makeEvent(SECRET));
+    const second = t.makeEvent('sk-' + 'b'.repeat(30));
+    await t.firePaste(second);
+    expect(second.preventDefault).toHaveBeenCalled();
+    expect(second.stopImmediatePropagation).toHaveBeenCalled();
+    expect(mountOverlayMock).toHaveBeenCalledTimes(1);
+    expect(document.execCommand).not.toHaveBeenCalled();
+  });
+
+  test('the guard becomes busy before an asynchronous quota lookup', async () => {
+    let resolve!: (value: Awaited<ReturnType<typeof getAnonymizeStatus>>) => void;
+    vi.mocked(getAnonymizeStatus).mockImplementationOnce(
+      () =>
+        new Promise((r) => {
+          resolve = r;
+        }),
+    );
+    const t = setup();
+    await t.start();
+    const first = t.firePaste(t.makeEvent(SECRET));
+    await vi.waitFor(() => expect(resolve).toBeTypeOf('function'));
+    const second = t.makeEvent(SECRET);
+    await t.firePaste(second);
+    expect(second.preventDefault).toHaveBeenCalled();
+    resolve({ used: 0, remaining: 10, limit: 10, unlimited: false });
+    await first;
+    expect(mountOverlayMock).toHaveBeenCalledTimes(1);
+  });
+
+  test('cancelled quota lookups cannot reopen the warning when they finish', async () => {
+    let resolve!: (value: Awaited<ReturnType<typeof getAnonymizeStatus>>) => void;
+    vi.mocked(getAnonymizeStatus).mockImplementationOnce(
+      () =>
+        new Promise((r) => {
+          resolve = r;
+        }),
+    );
+    const t = setup();
+    await t.start();
+    const first = t.firePaste(t.makeEvent(SECRET));
+    await vi.waitFor(() => expect(resolve).toBeTypeOf('function'));
+    mountPasteStatusMock.mock.calls.at(-1)![2]();
+    await first;
+    resolve({ used: 0, remaining: 10, limit: 10, unlimited: false });
+    await Promise.resolve();
+    expect(mountOverlayMock).not.toHaveBeenCalled();
+    await t.firePaste(t.makeEvent(SECRET));
+    expect(mountOverlayMock).toHaveBeenCalledTimes(1);
+  });
+
+  test('a repeated action or a stale cancelled callback never inserts twice', async () => {
+    const t = setup();
+    await t.start();
+    await t.firePaste(t.makeEvent(SECRET));
+    const old = lastOnAction();
+    await old('cancel');
+    await t.firePaste(t.makeEvent(SECRET));
+    await old('paste');
+    expect(document.execCommand).not.toHaveBeenCalled();
+    const action = lastOnAction();
+    await Promise.all([action('paste'), action('paste')]);
+    expect(document.execCommand).toHaveBeenCalledTimes(1);
+  });
+
+  test('quota refusal at action time does not insert text', async () => {
+    const t = setup();
+    await t.start();
+    await t.firePaste(t.makeEvent(SECRET));
+    vi.mocked(consumeAnonymize).mockResolvedValueOnce(false);
+    await lastOnAction()('redact');
+    expect(document.execCommand).not.toHaveBeenCalled();
+    expect(mountPasteStatusMock.mock.calls.at(-1)![1]).toBe('error');
+  });
+
+  test('cancelling while the action status mounts does not consume quota', async () => {
+    const t = setup();
+    await t.start();
+    await t.firePaste(t.makeEvent(SECRET));
+    vi.mocked(consumeAnonymize).mockClear();
+    mountPasteStatusMock.mockImplementationOnce(async (_ctx, _status, cancel) => {
+      cancel();
+      return { remove: vi.fn() };
+    });
+    await lastOnAction()('redact');
+    expect(consumeAnonymize).not.toHaveBeenCalled();
+    expect(document.execCommand).not.toHaveBeenCalled();
+  });
+
+  test('editing while an action waits for quota cancels its eventual insertion', async () => {
+    let resolve!: (allowed: boolean) => void;
+    const t = setup();
+    await t.start();
+    await t.firePaste(t.makeEvent(SECRET));
+    vi.mocked(consumeAnonymize).mockImplementationOnce(
+      () =>
+        new Promise((r) => {
+          resolve = r;
+        }),
+    );
+    const action = lastOnAction()('redact');
+    await vi.waitFor(() => expect(resolve).toBeTypeOf('function'));
+    t.editInput();
+    resolve(true);
+    await action;
+    expect(document.execCommand).not.toHaveBeenCalled();
+  });
+
+  test('untrusted editor re-inserts remain untouched even while a warning is open', async () => {
+    const t = setup();
+    await t.start();
+    await t.firePaste(t.makeEvent(SECRET));
+    const synthetic = { ...t.makeEvent(SECRET), isTrusted: false };
+    await t.firePaste(synthetic);
+    expect(synthetic.preventDefault).not.toHaveBeenCalled();
+  });
+
+  test('oversized pastes are blocked with an explanation and can be dismissed', async () => {
+    const t = setup();
+    await t.start();
+    const e = t.makeEvent('x'.repeat(MAX_PASTE_CHARS + 1));
+    await t.firePaste(e);
+    expect(e.preventDefault).toHaveBeenCalled();
+    expect(mountPasteStatusMock.mock.calls.at(-1)![1]).toBe('too-large');
+    expect(mountOverlayMock).not.toHaveBeenCalled();
+    mountPasteStatusMock.mock.calls.at(-1)![2]();
+    const clean = t.makeEvent('ordinary text');
+    await t.firePaste(clean);
+    expect(clean.preventDefault).not.toHaveBeenCalled();
+  });
+
+  test('cancelling a status while it mounts removes the late UI and never inserts', async () => {
+    const remove = vi.fn();
+    mountPasteStatusMock.mockImplementationOnce(async (_ctx, _status, cancel) => {
+      cancel();
+      return { remove, update: vi.fn() };
+    });
+    const t = setup();
+    await t.start();
+    await t.firePaste(t.makeEvent('ordinary text '.repeat(10000)));
+    expect(remove).toHaveBeenCalled();
+    expect(document.execCommand).not.toHaveBeenCalled();
+    expect(mountOverlayMock).not.toHaveBeenCalled();
+    await t.firePaste(t.makeEvent(SECRET));
+    expect(mountOverlayMock).toHaveBeenCalledTimes(1);
+  });
+
+  test('a removed composer cannot receive an old warning action', async () => {
+    const t = setup();
+    await t.start();
+    await t.firePaste(t.makeEvent(SECRET));
+    t.input.remove();
+    await lastOnAction()('paste');
+    expect(document.execCommand).not.toHaveBeenCalled();
+  });
+
+  test('a cooperatively scanned clean paste inserts once after checking', async () => {
+    const t = setup();
+    await t.start();
+    const text = 'ordinary text '.repeat(Math.ceil(ASYNC_PASTE_CHARS / 14));
+    const e = t.makeEvent(text);
+    await t.firePaste(e);
+    expect(e.preventDefault).toHaveBeenCalled();
+    expect(document.execCommand).toHaveBeenCalledExactlyOnceWith('insertText', false, text);
+  });
+
   test('ignores programmatic (untrusted) pastes to avoid re-insert loops', async () => {
     const t = setup();
     await t.start();
@@ -216,7 +393,7 @@ describe('createPasteGuard', () => {
     const t = setup();
     await t.start();
     await t.firePaste(t.makeEvent(`x ${SECRET} y`));
-    lastOnAction()('paste');
+    await lastOnAction()('paste');
 
     expect(document.execCommand).toHaveBeenCalledWith('insertText', false, `x ${SECRET} y`);
   });
@@ -253,7 +430,7 @@ describe('createPasteGuard', () => {
     await t.start();
     await t.firePaste(t.makeEvent(`x ${SECRET} y`));
     (document.execCommand as ReturnType<typeof vi.fn>).mockClear();
-    lastOnAction()('paste');
+    await lastOnAction()('paste');
 
     expect(pasted).toContain(SECRET);
     expect(document.execCommand).not.toHaveBeenCalled();
@@ -264,7 +441,7 @@ describe('createPasteGuard', () => {
     const t = setup();
     await t.start();
     await t.firePaste(t.makeEvent(`x ${SECRET} y`));
-    lastOnAction()('redact');
+    await lastOnAction()('redact');
 
     const inserted = (document.execCommand as ReturnType<typeof vi.fn>).mock.calls.at(-1)![2];
     expect(inserted).not.toContain(SECRET);
@@ -282,7 +459,7 @@ describe('createPasteGuard', () => {
     expect(mountOverlayMock.mock.calls[0][1].pro).toBe(false);
 
     // Even if the (locked) action fires, the pro path does not run.
-    lastOnAction()('redact');
+    await lastOnAction()('redact');
     const calls = (document.execCommand as ReturnType<typeof vi.fn>).mock.calls;
     expect(calls.every((c) => !/⟦SI:[0-9a-f]{8}⟧/.test(String(c[2])))).toBe(true);
   });
@@ -309,7 +486,7 @@ describe('createPasteGuard', () => {
     expect(mountOverlayMock.mock.calls[0][1].pro).toBe(true);
     // Allowance remaining → no "you're out" messaging.
     expect(mountOverlayMock.mock.calls[0][1].quotaExhausted).toBeUndefined();
-    lastOnAction()('redact');
+    await lastOnAction()('redact');
     const inserted = (document.execCommand as ReturnType<typeof vi.fn>).mock.calls.at(-1)![2];
     expect(inserted).toMatch(/⟦SI:[0-9a-f]{8}⟧/);
   });
@@ -322,7 +499,7 @@ describe('createPasteGuard', () => {
     await t.start();
     await t.firePaste(t.makeEvent(`x ${SECRET} y`));
 
-    lastOnAction()('upgrade');
+    await lastOnAction()('upgrade');
     expect(sendMessage).toHaveBeenCalledWith({ type: 'si-open-upgrade' });
     // Nothing is inserted: an upgrade click is not a paste.
     const calls = (document.execCommand as ReturnType<typeof vi.fn>).mock.calls;
@@ -334,7 +511,7 @@ describe('createPasteGuard', () => {
     const t = setup();
     await t.start();
     await t.firePaste(t.makeEvent(`x ${SECRET} y`));
-    lastOnAction()('redact');
+    await lastOnAction()('redact');
 
     const inserted = (document.execCommand as ReturnType<typeof vi.fn>).mock.calls.at(-1)![2];
     expect(inserted).not.toContain(SECRET);
@@ -344,7 +521,7 @@ describe('createPasteGuard', () => {
   // Dehydrate a secret, then paste its token back, returning the token string.
   async function dehydrateToken(t: ReturnType<typeof setup>): Promise<string> {
     await t.firePaste(t.makeEvent(`x ${SECRET} y`));
-    lastOnAction()('redact'); // populates memVault synchronously
+    await lastOnAction()('redact'); // populates memVault synchronously
     const inserted = (document.execCommand as ReturnType<typeof vi.fn>).mock.calls.at(-1)![2];
     return inserted.match(/⟦SI:[0-9a-f]{8}⟧/)![0];
   }
@@ -360,7 +537,7 @@ describe('createPasteGuard', () => {
     // A rehydrate overlay is shown rather than swapping silently.
     expect(mountOverlayMock.mock.calls.at(-1)![1].rehydrate).toEqual({ tokenCount: 1 });
 
-    lastOnAction()('rehydrate');
+    await lastOnAction()('rehydrate');
     const out = (document.execCommand as ReturnType<typeof vi.fn>).mock.calls.at(-1)![2];
     expect(out).toBe(`const key = "${SECRET}";`);
   });
@@ -371,10 +548,22 @@ describe('createPasteGuard', () => {
     const token = await dehydrateToken(t);
 
     await t.firePaste(t.makeEvent(`const key = "${token}";`));
-    lastOnAction()('paste');
+    await lastOnAction()('paste');
     const out = (document.execCommand as ReturnType<typeof vi.fn>).mock.calls.at(-1)![2];
     expect(out).toBe(`const key = "${token}";`);
     expect(out).not.toContain(SECRET);
+  });
+
+  test('a mixed paste with known tokens and raw secrets still gets a secret warning', async () => {
+    const t = setup();
+    await t.start();
+    const token = await dehydrateToken(t);
+    const e = t.makeEvent(`${token} and ${SECRET}`);
+    await t.firePaste(e);
+    expect(e.preventDefault).toHaveBeenCalled();
+    const props = mountOverlayMock.mock.calls.at(-1)![1];
+    expect(props.rehydrate).toBeUndefined();
+    expect(props.detections).toHaveLength(1);
   });
 
   test('rehydrate: "Cancel" drops the paste (nothing inserted)', async () => {
@@ -384,7 +573,7 @@ describe('createPasteGuard', () => {
     const insertsBefore = (document.execCommand as ReturnType<typeof vi.fn>).mock.calls.length;
 
     await t.firePaste(t.makeEvent(`const key = "${token}";`));
-    lastOnAction()('cancel');
+    await lastOnAction()('cancel');
     expect((document.execCommand as ReturnType<typeof vi.fn>).mock.calls.length).toBe(
       insertsBefore,
     );
@@ -432,7 +621,7 @@ describe('createPasteGuard', () => {
     expect(props.summary).toBeTruthy();
     expect(props.summary.total).toBeGreaterThanOrEqual(2);
 
-    lastOnAction()('sanitize');
+    await lastOnAction()('sanitize');
     const inserted = (document.execCommand as ReturnType<typeof vi.fn>).mock.calls.at(-1)![2];
     expect(inserted).not.toContain('10.0.0.5');
     expect(inserted).not.toContain('ops@corp.com');
@@ -474,7 +663,7 @@ describe('createPasteGuard', () => {
     const t = setup();
     await t.start();
     await t.firePaste(t.makeEvent(`x ${SECRET} y`));
-    lastOnAction()('cancel');
+    await lastOnAction()('cancel');
 
     expect(document.execCommand).not.toHaveBeenCalled();
   });
@@ -484,7 +673,7 @@ describe('createPasteGuard', () => {
     await t.start();
     await t.firePaste(t.makeEvent(`x ${SECRET} y`));
 
-    lastOnAction()('redact');
+    await lastOnAction()('redact');
 
     const event = await vi.waitFor(() => {
       const call = sendTelemetrySpy.mock.calls.find(([e]) => e?.action === 'paste_anonymously');
@@ -595,7 +784,7 @@ describe('createPasteGuard', () => {
     expect(mountOverlayMock).not.toHaveBeenCalled();
   });
 
-  test('fail-open: re-inserts the blocked paste when mountOverlay throws', async () => {
+  test('an overlay failure keeps raw text blocked', async () => {
     // Arrange: make mountOverlay reject so the catch branch is exercised
     mountOverlayMock.mockRejectedValueOnce(new Error('mount boom'));
 
@@ -613,8 +802,12 @@ describe('createPasteGuard', () => {
     // The paste was intercepted (blocked) before the error
     expect(e.preventDefault).toHaveBeenCalled();
 
-    // Fail-open: execCommand must have been called to re-insert the original text
-    expect(document.execCommand).toHaveBeenCalledWith('insertText', false, text);
+    expect(document.execCommand).not.toHaveBeenCalled();
+    expect(mountPasteStatusMock).toHaveBeenLastCalledWith(
+      expect.anything(),
+      'error',
+      expect.any(Function),
+    );
   });
 });
 
@@ -661,11 +854,37 @@ describe('createPasteGuard — team policy', () => {
     expect(lastProps().policyBlock).toBeUndefined();
     expect(lastProps().blockRawPaste).toBe(false);
 
-    lastOnAction()('paste'); // "Paste anyway" still inserts the original text
+    await lastOnAction()('paste'); // "Paste anyway" still inserts the original text
     expect(document.execCommand).toHaveBeenCalledWith('insertText', false, `x ${SECRET} y`);
   });
 
   describe('blockInsteadOfWarn', () => {
+    test('tokens cannot restore raw secrets under a raw-paste restriction', async () => {
+      await savePolicy({ blockInsteadOfWarn: true });
+      const t = setup();
+      await t.start();
+      await t.firePaste(t.makeEvent(SECRET));
+      await lastOnAction()('redact');
+      const token = inserts().at(-1)![2];
+      mountOverlayMock.mockClear();
+      (document.execCommand as ReturnType<typeof vi.fn>).mockClear();
+      const e = t.makeEvent(token);
+      await t.firePaste(e);
+      expect(mountOverlayMock).not.toHaveBeenCalled();
+      expect(document.execCommand).not.toHaveBeenCalled();
+      expect(e.preventDefault).not.toHaveBeenCalled(); // inert tokens can still paste
+    });
+    test('a second paste cannot bypass the team block', async () => {
+      await savePolicy({ blockInsteadOfWarn: true });
+      const t = setup();
+      await t.start();
+      await t.firePaste(t.makeEvent(SECRET));
+      const second = t.makeEvent(SECRET);
+      await t.firePaste(second);
+      expect(second.preventDefault).toHaveBeenCalled();
+      expect(second.stopImmediatePropagation).toHaveBeenCalled();
+      expect(document.execCommand).not.toHaveBeenCalled();
+    });
     test('the overlay is told not to offer "Paste anyway"', async () => {
       await savePolicy({ blockInsteadOfWarn: true });
       const t = setup();
@@ -682,7 +901,7 @@ describe('createPasteGuard — team policy', () => {
       await t.start();
       await t.firePaste(t.makeEvent(`x ${SECRET} y`));
 
-      lastOnAction()('paste');
+      await lastOnAction()('paste');
       expect(document.execCommand).not.toHaveBeenCalled();
     });
 
@@ -692,7 +911,7 @@ describe('createPasteGuard — team policy', () => {
       await t.start();
       await t.firePaste(t.makeEvent(`x ${SECRET} y`));
 
-      lastOnAction()('paste');
+      await lastOnAction()('paste');
       const event = await vi.waitFor(() => {
         const call = sendTelemetrySpy.mock.calls.at(-1);
         expect(call).toBeTruthy();
@@ -707,7 +926,7 @@ describe('createPasteGuard — team policy', () => {
       await t.start();
       await t.firePaste(t.makeEvent(`x ${SECRET} y`));
 
-      lastOnAction()('redact');
+      await lastOnAction()('redact');
       const inserted = inserts().at(-1)![2];
       expect(inserted).not.toContain(SECRET);
       expect(inserted).toMatch(/⟦SI:[0-9a-f]{8}⟧/);
@@ -743,8 +962,8 @@ describe('createPasteGuard — team policy', () => {
       expect(lastProps().policyBlock).toEqual({ host: location.hostname });
 
       // No outcome inserts anything here — not even the (absent) paste action.
-      lastOnAction()('paste');
-      lastOnAction()('cancel');
+      await lastOnAction()('paste');
+      await lastOnAction()('cancel');
       expect(document.execCommand).not.toHaveBeenCalled();
     });
 
@@ -757,8 +976,8 @@ describe('createPasteGuard — team policy', () => {
 
       // The block notice replaces the Ghost summary — no paste, no sanitize.
       expect(lastProps().policyBlock).toEqual({ host: location.hostname });
-      lastOnAction()('sanitize');
-      lastOnAction()('paste');
+      await lastOnAction()('sanitize');
+      await lastOnAction()('paste');
       expect(document.execCommand).not.toHaveBeenCalled();
     });
 
@@ -796,7 +1015,7 @@ describe('createPasteGuard — team policy', () => {
       await t.firePaste(t.makeEvent(`x ${SECRET} y`));
 
       expect(lastProps().policyBlock).toBeUndefined();
-      lastOnAction()('paste');
+      await lastOnAction()('paste');
       expect(document.execCommand).toHaveBeenCalledWith('insertText', false, `x ${SECRET} y`);
     });
 
@@ -805,7 +1024,7 @@ describe('createPasteGuard — team policy', () => {
       const t = setup();
       await t.start();
       await t.firePaste(t.makeEvent(`x ${SECRET} y`));
-      lastOnAction()('redact');
+      await lastOnAction()('redact');
       const token = inserts()
         .at(-1)![2]
         .match(/⟦SI:[0-9a-f]{8}⟧/)![0];

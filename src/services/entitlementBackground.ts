@@ -1,5 +1,6 @@
 import { createClerkClient } from '@clerk/chrome-extension/client';
 import { API_BASE } from '@/lib/api/client';
+import { abortable, withDeadline } from '@/lib/async';
 import {
   CLERK_JWT_TEMPLATE,
   CLERK_PUBLISHABLE_KEY,
@@ -9,7 +10,7 @@ import {
 } from '@/lib/clerkConfig';
 import { siDebug } from '@/lib/debug';
 import { entitlementItem } from '@/lib/entitlement';
-import { refreshEntitlement } from '@/lib/entitlement/refresh';
+import { type RefreshResult, refreshEntitlement } from '@/lib/entitlement/refresh';
 import { offlineUsed } from '@/lib/quota/offline';
 import { getClerkTokenFromCookie, getClerkUserIdFromCookie } from './cookieToken';
 
@@ -31,11 +32,41 @@ export async function getClerkToken(): Promise<string | null> {
   return clerk.session.getToken({ template: CLERK_JWT_TEMPLATE });
 }
 
-/** Refresh the cached entitlement using the current Clerk session. */
-export async function refreshEntitlementBg() {
-  const result = await refreshEntitlement(getClerkToken);
-  siDebug('entitlement', 'bg refresh', { status: result.status, plan: result.plan ?? null });
-  return result;
+let pendingRefresh: { controller: AbortController; promise: Promise<RefreshResult> } | undefined;
+
+/** A session change must not reuse, or be overwritten by, an older refresh. */
+export function invalidateEntitlementRefresh(): void {
+  const previous = pendingRefresh;
+  pendingRefresh = undefined;
+  previous?.controller.abort();
+}
+
+/** Share concurrent popup/startup refreshes; release the request on failure/timeout. */
+export function refreshEntitlementBg(): Promise<RefreshResult> {
+  if (pendingRefresh) return pendingRefresh.promise;
+  const controller = new AbortController();
+  const promise = withDeadline(async (signal) => {
+    const result = await refreshEntitlement(getClerkToken, signal);
+    // Even when the API is offline, reject a cached plan belonging to a
+    // different known session. Keep this check inside the shared pipeline.
+    await enforceEntitlementBinding(signal);
+    return result;
+  }, controller)
+    .catch(
+      (error): RefreshResult => ({
+        status: 'error',
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    )
+    .then((result) => {
+      siDebug('entitlement', 'bg refresh', { status: result.status, plan: result.plan ?? null });
+      return result;
+    })
+    .finally(() => {
+      if (pendingRefresh?.controller === controller) pendingRefresh = undefined;
+    });
+  pendingRefresh = { controller, promise };
+  return promise;
 }
 
 /** The currently signed-in Clerk user id from the background session, or null. */
@@ -43,11 +74,16 @@ export async function getClerkUserId(): Promise<string | null> {
   if (!isAuthEnabled()) return null;
   if (IS_FIREFOX) return getClerkUserIdFromCookie();
   try {
-    const clerk = await createClerkClient({
-      publishableKey: CLERK_PUBLISHABLE_KEY,
-      syncHost: CLERK_SYNC_HOST,
-      background: true,
-    });
+    const clerk = await withDeadline((signal) =>
+      abortable(
+        createClerkClient({
+          publishableKey: CLERK_PUBLISHABLE_KEY,
+          syncHost: CLERK_SYNC_HOST,
+          background: true,
+        }),
+        signal,
+      ),
+    );
     return clerk.session?.user?.id ?? clerk.user?.id ?? null;
   } catch {
     return null;
@@ -61,11 +97,19 @@ export async function getClerkUserId(): Promise<string | null> {
  * different user id), never when the session id can't be read, so a legitimate
  * user is never wrongly downgraded to free.
  */
-export async function enforceEntitlementBinding(): Promise<void> {
+export async function enforceEntitlementBinding(signal?: AbortSignal): Promise<void> {
   const stored = await entitlementItem.getValue();
   if (!stored) return;
-  const userId = await getClerkUserId();
+  const userId = await (signal ? abortable(getClerkUserId(), signal) : getClerkUserId());
+  signal?.throwIfAborted();
   if (userId && stored.blob.clerkUserId !== userId) {
+    const latest = await entitlementItem.getValue();
+    signal?.throwIfAborted();
+    if (
+      latest?.signature !== stored.signature ||
+      latest?.blob.clerkUserId !== stored.blob.clerkUserId
+    )
+      return;
     siDebug('entitlement', 'binding mismatch — clearing', { current: userId });
     await entitlementItem.setValue(null);
   }
@@ -73,20 +117,23 @@ export async function enforceEntitlementBinding(): Promise<void> {
 
 /** GET the signed-in user's Anonymise & Paste allowance from the Worker. */
 export async function getUsageStatus(): Promise<unknown | null> {
-  const token = await getClerkToken();
-  if (!token) return null;
   try {
-    // Carry the on-device (offline) count into the account so signing in doesn't
-    // reset the allowance to a fresh 10/10 — the backend reconciles to the max.
-    const offline = await offlineUsed().catch(() => 0);
-    const res = await fetch(`${API_BASE}/v1/usage`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'X-SI-Offline-Used': String(offline),
-      },
-      cache: 'no-store',
+    return await withDeadline(async (signal) => {
+      const token = await abortable(getClerkToken(), signal);
+      if (!token) return null;
+      // Carry the on-device (offline) count into the account so signing in doesn't
+      // reset the allowance to a fresh 10/10 — the backend reconciles to the max.
+      const offline = await offlineUsed().catch(() => 0);
+      const res = await fetch(`${API_BASE}/v1/usage`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'X-SI-Offline-Used': String(offline),
+        },
+        cache: 'no-store',
+        signal,
+      });
+      return res.ok ? await res.json() : null;
     });
-    return res.ok ? await res.json() : null;
   } catch {
     return null;
   }
@@ -94,14 +141,17 @@ export async function getUsageStatus(): Promise<unknown | null> {
 
 /** Consume one Anonymise & Paste for the signed-in user. */
 export async function consumeUsage(): Promise<unknown | null> {
-  const token = await getClerkToken();
-  if (!token) return null;
   try {
-    const res = await fetch(`${API_BASE}/v1/usage/anonymize`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
+    return await withDeadline(async (signal) => {
+      const token = await abortable(getClerkToken(), signal);
+      if (!token) return null;
+      const res = await fetch(`${API_BASE}/v1/usage/anonymize`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        signal,
+      });
+      return res.ok ? await res.json() : null;
     });
-    return res.ok ? await res.json() : null;
   } catch {
     return null;
   }

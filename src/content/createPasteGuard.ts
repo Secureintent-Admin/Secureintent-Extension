@@ -1,4 +1,5 @@
 import { browser, type ContentScriptContext, storage } from '#imports';
+import { abortable, withDeadline, yieldToBrowser } from '@/lib/async';
 import { contentHash } from '@/lib/bridge/hash';
 import { DEFAULT_BUNDLE, getActiveBundle, getPolicy, isBlockedHost } from '@/lib/config';
 import { acceptTerms, consentItem, consentSatisfied, isConsentAccepted } from '@/lib/consent';
@@ -6,8 +7,10 @@ import { elapsedMs, siDebug, siError } from '@/lib/debug';
 import {
   compilePatterns,
   detectSecrets,
+  detectSecretsAsync,
   GHOST_EXTRA_PATTERNS,
   GHOST_MIN_CHARS,
+  rehydrateTokens,
   sanitize,
   summarize,
   TOKEN_RE,
@@ -24,8 +27,9 @@ import {
 import { consumeAnonymize, formatQuotaReset, getAnonymizeStatus } from '@/lib/quota';
 import type { TelemetryAction } from '@/lib/telemetry/types';
 import { type VaultStore, vaultPut, vaultSnapshot } from '@/lib/vault';
-import { mountOverlay } from '@/overlay/mount';
+import { mountOverlay, type OverlayHandle } from '@/overlay/mount';
 import { mountConsentGate } from '@/overlay/mountConsentGate';
+import { mountPasteStatus, type PasteStatus } from '@/overlay/mountPasteStatus';
 import { buildEvent, sendTelemetry } from '@/services/telemetryService';
 import { enabledItem, isEnabled, recordBlocked } from '@/settings';
 import { findComposer } from './findComposer';
@@ -45,8 +49,17 @@ const sessionStore: VaultStore = {
   get: async (key) => (await storage.getItem<string>(`session:${key}`)) ?? undefined,
   set: (key, value) => storage.setItem(`session:${key}`, value),
 };
-// Match-all variant of the single-token regex, for scanning copied selections.
-const TOKEN_GLOBAL = new RegExp(TOKEN_RE.source, 'g');
+export const MAX_PASTE_CHARS = 2_000_000;
+export const ASYNC_PASTE_CHARS = 64_000;
+
+interface PasteJob {
+  input: HTMLElement;
+  controller: AbortController;
+  ui?: OverlayHandle;
+  uiVersion: number;
+  handled: boolean;
+  inserting?: boolean;
+}
 
 function insertText(el: HTMLElement, text: string): void {
   el.focus();
@@ -115,24 +128,98 @@ export async function createPasteGuard(
   if (!isFallback) markDedicated(); // synchronous: runs before the awaits below
 
   const salt = await getOrCreateSalt(browserStore);
-  let open = false;
+  let active: PasteJob | undefined;
+  const live = (job: PasteJob) => active === job && !job.controller.signal.aborted;
+  const finish = (job: PasteJob) => {
+    if (!live(job)) return;
+    active = undefined;
+    job.controller.abort();
+    job.ui?.remove();
+  };
+  const present = async (job: PasteJob, mount: () => Promise<OverlayHandle>) => {
+    if (!live(job)) return;
+    if (!job.input.isConnected) {
+      finish(job);
+      return;
+    }
+    const version = ++job.uiVersion;
+    job.ui?.remove();
+    job.ui = undefined;
+    const ui = await mount();
+    if (live(job) && job.uiVersion === version && job.input.isConnected) job.ui = ui;
+    else ui.remove(); // cancelled or superseded while the UI was mounting
+  };
+  const status = (job: PasteJob, kind: PasteStatus) =>
+    present(job, () => mountPasteStatus(ctx, kind, () => finish(job)));
+  const failed = async (job: PasteJob, error: unknown) => {
+    if (!live(job)) return;
+    siError(config.name, 'paste operation failed; text remains blocked', error);
+    try {
+      await status(job, 'error');
+    } catch {
+      finish(job); // a broken UI must not trap subsequent pastes
+    }
+  };
+  const act = async (job: PasteJob, action: () => void | Promise<void>) => {
+    if (!live(job) || job.handled) return;
+    if (!job.input.isConnected) {
+      finish(job);
+      return;
+    }
+    job.handled = true;
+    try {
+      await action();
+      finish(job);
+    } catch (error) {
+      await failed(job, error);
+    }
+  };
+  const insert = (job: PasteJob, text: string) => {
+    if (!live(job) || !job.input.isConnected) return;
+    job.inserting = true;
+    try {
+      insertText(job.input, text);
+    } finally {
+      job.inserting = false;
+    }
+  };
+  ctx.addEventListener(window, 'keydown', (event) => {
+    if ((event as KeyboardEvent).key === 'Escape' && active) finish(active);
+  });
+  ctx.addEventListener(window, 'pagehide', () => {
+    if (active) finish(active);
+  });
+  ctx.addEventListener(document, 'input', (event) => {
+    if (active && !active.inserting && (event as Event).composedPath().includes(active.input)) {
+      finish(active); // the user edited the composer while a decision was pending
+    }
+  });
+  ctx.onInvalidated?.(() => {
+    if (active) finish(active);
+  });
 
   // Terms & Privacy consent, cached synchronously (read in the paste handler
   // before any await). Blocking: no warning is shown until the user accepts.
   let consented = await isConsentAccepted();
-  consentItem.watch((value) => {
+  const stopConsent = consentItem.watch((value) => {
     consented = consentSatisfied(value);
   });
 
   // preventDefault must run before any await, so cache enabled synchronously
   let enabled = await isEnabled();
-  enabledItem.watch((value) => {
+  const stopEnabled = enabledItem.watch((value) => {
     enabled = value ?? true;
+    if (!enabled && active) finish(active);
   });
 
   // Prime the entitlement cache so the gate can be read synchronously in the
   // overlay action handler (pro features: rehydrate / ghost).
-  await initEntitlementCache();
+  const stopEntitlement = await initEntitlementCache();
+  ctx.onInvalidated?.(() => {
+    stopConsent();
+    stopEnabled();
+    stopEntitlement();
+  });
 
   const bundle = await getActiveBundle();
   const compiled = compilePatterns(bundle.patterns);
@@ -193,83 +280,119 @@ export async function createPasteGuard(
     'paste',
     async (event) => {
       const e = event as ClipboardEvent;
-      let recoverPaste: (() => void) | null = null;
+      let job: PasteJob | undefined;
+      const intercept = () => {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        if (!job) {
+          job = { input, controller: new AbortController(), uiVersion: 0, handled: false };
+          active = job;
+        }
+        return job;
+      };
+      let input: HTMLElement;
       try {
         if (isFallback && dedicatedActive()) return; // a dedicated guard owns this site
-        if (open) return;
         if (!enabled) return; // protection off — let the paste through
         if (bundle.killSwitch) return; // remote kill-switch — let the paste through
         if (!e.isTrusted) return; // ignore programmatic pastes (e.g. our own re-inserts)
 
         // composedPath includes shadow-internal nodes, so sites whose composer lives
         // inside a web-component shadow root (e.g. Reddit) are matched too.
-        const input = findComposer(e.composedPath(), inputSelector);
-        if (!input) return;
+        const composer = findComposer(e.composedPath(), inputSelector);
+        if (!composer) return;
+        input = composer;
+        if (active && !active.input.isConnected) finish(active);
+        if (active) {
+          // Returning alone allows Chrome's default paste to leak raw text.
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          return;
+        }
 
         const text = e.clipboardData?.getData('text/plain') ?? '';
         if (!text) return;
+        if (text.length > MAX_PASTE_CHARS) {
+          await status(intercept(), 'too-large');
+          return;
+        }
+        const large = text.length >= ASYNC_PASTE_CHARS;
+        if (large) {
+          const pending = intercept(); // MUST run before the first await
+          await status(pending, 'checking');
+          await yieldToBrowser(pending.controller.signal);
+        }
+
+        const ghostMode = text.length >= ghostMin;
+        const tDetect = performance.now();
+        const detections =
+          large && job
+            ? await detectSecretsAsync(
+                text,
+                ghostMode ? ghostPatterns : patterns,
+                job.controller.signal,
+              )
+            : detectSecrets(text, ghostMode ? ghostPatterns : patterns);
+        if (job && !live(job)) return;
+        const detectMs = elapsedMs(tDetect);
 
         // Rehydrate: if the pasted text carries our tokens, prompt to swap them
         // back to the real secrets at insert time (or keep the tokens / cancel).
         // The secret stays out of the OS clipboard — it only ever materializes on
-        // insert. Fails open on any error. Rehydrate is a Pro feature: without the
+        // insert. Rehydrate is a Pro feature: without the
         // entitlement, skip the prompt entirely and let the tokens paste as-is.
-        // Never offered on a policy-blocked host — restoring a real secret into a
-        // destination the team forbids is the one thing that rule prohibits. The
-        // inert tokens themselves may still paste; they carry nothing.
-        if (!policyBlockedHost && hasFeatureCached('rehydrate') && TOKEN_RE.test(text)) {
-          const tokens = new Set(text.match(TOKEN_GLOBAL) ?? []);
-          let restored = text;
-          let known = 0;
-          for (const token of tokens) {
-            const secret = memVault.get(token);
-            if (secret !== undefined) {
-              restored = restored.split(token).join(secret);
-              known++;
-            }
-          }
+        // Only offer this where raw secrets are permitted. A mixed paste that
+        // already contains raw secrets must go through the ordinary warning;
+        // "keep tokens" must not become an unchecked route for those secrets.
+        if (
+          allowRawPaste &&
+          detections.length === 0 &&
+          hasFeatureCached('rehydrate') &&
+          TOKEN_RE.test(text)
+        ) {
+          const { text: restored, tokenCount: known } = rehydrateTokens(text, memVault);
           if (known > 0) {
-            e.preventDefault();
-            e.stopImmediatePropagation();
-            open = true;
-            const overlay = await mountOverlay(ctx, {
-              site: config.name,
-              text,
-              detections: [],
-              rehydrate: { tokenCount: known },
-              onAction: (action) => {
-                if (action === 'rehydrate') insertText(input, restored);
-                else if (action === 'paste') insertText(input, text); // keep tokens as-is
-                // cancel → drop the paste entirely
-                overlay.remove();
-                open = false;
-                siDebug(config.name, 'rehydrate prompt', { action, tokens: known });
-              },
-            });
+            const pending = intercept();
+            await present(pending, () =>
+              mountOverlay(ctx, {
+                site: config.name,
+                text,
+                detections: [],
+                rehydrate: { tokenCount: known },
+                onAction: (action) =>
+                  act(pending, () => {
+                    if (!hasFeatureCached('rehydrate') && action === 'rehydrate') return;
+                    if (action === 'rehydrate') insert(pending, restored);
+                    else if (action === 'paste') insert(pending, text); // keep tokens as-is
+                    // cancel → drop the paste entirely
+                    siDebug(config.name, 'rehydrate prompt', { action, tokens: known });
+                  }),
+              }),
+            );
             return;
           }
           // Unknown/expired tokens aren't secrets — fall through to normal handling.
         }
 
-        // Large pastes look like log/terminal dumps: take the aggressive Ghost
-        // path (expanded ruleset + summary overlay) instead of the per-finding one.
-        const ghostMode = text.length >= ghostMin;
-        const tDetect = performance.now();
-        const detections = detectSecrets(text, ghostMode ? ghostPatterns : patterns);
-        const detectMs = elapsedMs(tDetect);
         // A blocked destination is about the SITE, not the secret: the admin is
         // told "the extension refuses every paste, whether or not it finds a
         // secret", so a clean paste must be stopped here too. Letting it through
         // would quietly break the promise the console makes to whoever set the
         // rule — and these are the sites a team has decided to feed nothing.
-        if (detections.length === 0 && !policyBlockedHost) return; // normal paste
-
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        if (allowRawPaste) recoverPaste = () => insertText(input, text);
+        if (detections.length === 0 && !policyBlockedHost) {
+          // Small clean pastes use Chrome's native insertion. Large ones were
+          // already intercepted, so insert only after the full scan completed.
+          if (job) {
+            const checked = job;
+            await act(checked, () => insert(checked, text));
+          }
+          return;
+        }
+        const pending = intercept();
         // Show the actual secret warning for this paste. Extracted so the
         // consent gate can call it after the user agrees (first-paste consent).
         const showWarning = async () => {
+          if (!live(pending)) return;
           recordBlocked(detections.length); // popup total; on-device only
           // per-tab action badge (background owns browser.action)
           browser.runtime
@@ -314,7 +437,16 @@ export async function createPasteGuard(
           // feature (Pro-only). Standard anonymise is free with a monthly quota,
           // then Pro — the status below reflects Pro OR remaining free allowance.
           const snapshot = getEntitlementSnapshot();
-          const quota = ghostMode ? null : await getAnonymizeStatus(snapshot);
+          let quota = null;
+          if (!ghostMode) {
+            await status(pending, 'checking');
+            if (!live(pending)) return;
+            quota = await abortable(
+              withDeadline(() => getAnonymizeStatus(snapshot)),
+              pending.controller.signal,
+            );
+          }
+          if (!live(pending)) return;
           const proAction = ghostMode
             ? hasFeatureCached('ghost')
             : Boolean(quota && (quota.unlimited || quota.remaining > 0));
@@ -326,87 +458,99 @@ export async function createPasteGuard(
               ? { limit: quota.limit, resetsOn: formatQuotaReset() }
               : undefined;
 
-          open = true;
           const tMount = performance.now();
-          const overlay = await mountOverlay(ctx, {
-            site: config.name,
-            text,
-            detections,
-            summary: ghostMode ? summarize(detections) : undefined,
-            pro: proAction,
-            quotaExhausted,
-            // Team policy: a blocked destination gets the notice view (no paste
-            // route at all); blockInsteadOfWarn just drops "Paste anyway".
-            policyBlock: policyBlockedHost ? { host: location.hostname } : undefined,
-            blockRawPaste: policy.blockInsteadOfWarn,
-            onAction: (action) => {
-              if (action === 'upgrade') {
-                // Hand off to the background to open the account page — the one
-                // place an already-installed user can actually buy or manage a plan.
-                browser.runtime.sendMessage({ type: 'si-open-upgrade' }).catch(() => {});
-                overlay.remove();
-                open = false;
-                return;
-              }
-              if (action === 'rehydrate') return; // only the rehydrate overlay emits this
-              // `allowRawPaste` is re-checked here, not just in the UI: the
-              // policy has to hold even if the overlay were driven some other
-              // way. Under a block the paste is simply dropped (= cancel).
-              if (action === 'paste') {
-                if (allowRawPaste) insertText(input, text);
-              } else if (action === 'sanitize' && proAction && !policyBlockedHost) {
-                // Ghost: strip every finding to a typed placeholder. Irreversible.
-                insertText(input, sanitize(text, detections));
-              } else if (action === 'redact' && proAction && !policyBlockedHost) {
-                // Count this Anonymise & Paste against the monthly quota (no-op for
-                // Pro). Fire-and-forget — canAnonymize() already gated the action.
-                consumeAnonymize(snapshot).catch(() => {});
-                // Dehydrate: replace secrets with reversible tokens and stash the
-                // token→secret map so a later paste can rehydrate them.
-                const { text: masked, entries } = tokenizeSecrets(text, detections);
-                insertText(input, masked);
-                for (const { token, secret } of entries) memVault.set(token, secret); // sync read path
-                vaultPut(sessionStore, origin, entries, Date.now()).catch((err) =>
-                  siError(config.name, 'vault put failed', err),
-                );
-              }
-              notifyAction({ ...featureCtx, action }); // pro: audit log / team report
-              // We showed a warning for this copy, so the desktop app — if the
-              // person runs it and has paired it — should not raise its own for
-              // the same one. Only the hash travels, computed here so the pasted
-              // text never crosses between extension contexts, and the background
-              // drops it entirely when the bridge is off.
-              browser.runtime
-                .sendMessage({ type: 'si-bridge-handled', hash: contentHash(text).toString() })
-                .catch(() => {});
-              if (!ghostMode && action !== 'sanitize' && fingerprintsPromise) {
-                // A refused "paste" inserted nothing, so it is reported as
-                // cancelled — never as paste_anyway, which would tell the team's
-                // dashboard a secret went through when it did not.
-                const telemetryAction =
-                  action === 'paste' && !allowRawPaste ? 'cancelled' : ACTION_BY_OVERLAY[action];
-                fingerprintsPromise.then((dets) => {
-                  if (dets.length === 0) return;
-                  sendTelemetry(
-                    buildEvent({
-                      site: config.name,
-                      policyVersion: bundle.version,
-                      detections: dets,
-                      action: telemetryAction,
-                      plan: snapshot.plan,
-                      source: snapshot.source,
-                      signedIn: snapshot.signedIn,
-                      businessDomain: snapshot.businessDomain,
-                      orgId: snapshot.orgId,
-                      actorId: snapshot.actorId,
-                    }),
-                  );
-                });
-              }
-              overlay.remove();
-              open = false;
-            },
-          });
+          await present(pending, () =>
+            mountOverlay(ctx, {
+              site: config.name,
+              text,
+              detections,
+              summary: ghostMode ? summarize(detections) : undefined,
+              pro: proAction,
+              quotaExhausted,
+              // Team policy: a blocked destination gets the notice view (no paste
+              // route at all); blockInsteadOfWarn just drops "Paste anyway".
+              policyBlock: policyBlockedHost ? { host: location.hostname } : undefined,
+              blockRawPaste: policy.blockInsteadOfWarn,
+              onAction: (action) =>
+                act(pending, async () => {
+                  if (action === 'upgrade') {
+                    // Hand off to the background to open the account page — the one
+                    // place an already-installed user can actually buy or manage a plan.
+                    browser.runtime.sendMessage({ type: 'si-open-upgrade' }).catch(() => {});
+                    return;
+                  }
+                  if (action === 'rehydrate') return; // only the rehydrate overlay emits this
+                  // `allowRawPaste` is re-checked here, not just in the UI: the
+                  // policy has to hold even if the overlay were driven some other
+                  // way. Under a block the paste is simply dropped (= cancel).
+                  if (action === 'paste') {
+                    if (allowRawPaste) insert(pending, text);
+                  } else if (
+                    action === 'sanitize' &&
+                    proAction &&
+                    hasFeatureCached('ghost') &&
+                    !policyBlockedHost
+                  ) {
+                    // Ghost: strip every finding to a typed placeholder. Irreversible.
+                    insert(pending, sanitize(text, detections));
+                  } else if (action === 'redact' && proAction && !policyBlockedHost) {
+                    // The preview can become stale while the warning is open. Do
+                    // not insert when the actual consume is refused or cancelled.
+                    await status(pending, 'checking');
+                    if (!live(pending)) return;
+                    const allowed = await abortable(
+                      withDeadline(() => consumeAnonymize(getEntitlementSnapshot())),
+                      pending.controller.signal,
+                    );
+                    if (!allowed) throw new Error('Anonymise allowance is no longer available');
+                    if (!live(pending) || !input.isConnected) return;
+                    // Dehydrate: replace secrets with reversible tokens and stash the
+                    // token→secret map so a later paste can rehydrate them.
+                    const { text: masked, entries } = tokenizeSecrets(text, detections);
+                    insert(pending, masked);
+                    for (const { token, secret } of entries) memVault.set(token, secret); // sync read path
+                    vaultPut(sessionStore, origin, entries, Date.now()).catch((err) =>
+                      siError(config.name, 'vault put failed', err),
+                    );
+                  }
+                  notifyAction({ ...featureCtx, action }); // pro: audit log / team report
+                  // We showed a warning for this copy, so the desktop app — if the
+                  // person runs it and has paired it — should not raise its own for
+                  // the same one. Only the hash travels, computed here so the pasted
+                  // text never crosses between extension contexts, and the background
+                  // drops it entirely when the bridge is off.
+                  browser.runtime
+                    .sendMessage({ type: 'si-bridge-handled', hash: contentHash(text).toString() })
+                    .catch(() => {});
+                  if (!ghostMode && action !== 'sanitize' && fingerprintsPromise) {
+                    // A refused "paste" inserted nothing, so it is reported as
+                    // cancelled — never as paste_anyway, which would tell the team's
+                    // dashboard a secret went through when it did not.
+                    const telemetryAction =
+                      action === 'paste' && !allowRawPaste
+                        ? 'cancelled'
+                        : ACTION_BY_OVERLAY[action];
+                    fingerprintsPromise.then((dets) => {
+                      if (dets.length === 0) return;
+                      sendTelemetry(
+                        buildEvent({
+                          site: config.name,
+                          policyVersion: bundle.version,
+                          detections: dets,
+                          action: telemetryAction,
+                          plan: snapshot.plan,
+                          source: snapshot.source,
+                          signedIn: snapshot.signedIn,
+                          businessDomain: snapshot.businessDomain,
+                          orgId: snapshot.orgId,
+                          actorId: snapshot.actorId,
+                        }),
+                      );
+                    });
+                  }
+                }),
+            }),
+          );
 
           siDebug(config.name, 'paste blocked', {
             secrets: detections.length,
@@ -419,26 +563,30 @@ export async function createPasteGuard(
         // Blocking consent gate: on the first paste that would warn, require the
         // user to accept Terms & Privacy before the extension protects anything.
         if (!consented) {
-          open = true;
-          const gate = await mountConsentGate(ctx, {
-            onAgree: () => {
-              acceptTerms().catch((err) => siError(config.name, 'consent save failed', err));
-              gate.remove();
-              void showWarning(); // now show the real warning for this same paste
-            },
-            onCancel: () => {
-              gate.remove();
-              open = false;
-            },
-          });
+          let agreed = false;
+          await present(pending, () =>
+            mountConsentGate(ctx, {
+              onAgree: () => {
+                if (!live(pending) || agreed) return;
+                agreed = true;
+                void acceptTerms()
+                  .then(() => showWarning())
+                  .catch((error) => failed(pending, error));
+              },
+              onCancel: () => finish(pending),
+            }),
+          );
           return;
         }
 
         await showWarning();
       } catch (err) {
-        siError(config.name, 'paste guard error, allowing paste', err);
-        recoverPaste?.(); // fail open: re-insert the text we blocked
-        open = false;
+        if (job) await failed(job, err);
+        else {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          siError(config.name, 'paste guard error; paste blocked', err);
+        }
       }
     },
     { capture: true },

@@ -13,7 +13,7 @@ declare const chrome: {
 };
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
-const EXT = path.resolve(dirname, '../dist/chrome-mv3');
+const EXT = path.resolve(dirname, process.env.SI_E2E_EXTENSION ?? '../dist/chrome-mv3');
 
 type WorkerFixtures = {
   // The persistent browser context, launched ONCE per worker. Playwright's
@@ -50,11 +50,11 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
       // getActiveBundle falls back to the bundled DEFAULT_BUNDLE under test.
       let [sw] = context.serviceWorkers();
       if (!sw) sw = await context.waitForEvent('serviceworker');
-      await sw.evaluate(() => {
-        chrome.storage.local.remove(['si_config', 'si_config_synced']);
+      await sw.evaluate(async () => {
+        await chrome.storage.local.remove(['si_config', 'si_config_synced']);
         // Pre-accept Terms & Privacy so guard-behavior specs exercise the paste
         // warning, not the first-run consent gate. The consent spec clears this.
-        chrome.storage.sync.set({ si_terms_consent: { version: 1, acceptedAt: Date.now() } });
+        await chrome.storage.sync.set({ si_terms_consent: { version: 1, acceptedAt: Date.now() } });
       });
       await use(context);
       await context.close();

@@ -1,3 +1,4 @@
+import { yieldToBrowser } from '../async';
 import type { Pattern } from './patterns';
 import { PATTERNS, TYPE_RANK } from './patterns';
 import type { Detection, SecretType } from './types';
@@ -7,6 +8,7 @@ export { compilePatterns, type RawPattern } from './compile';
 export { GHOST_EXTRA_PATTERNS, GHOST_MIN_CHARS } from './ghost';
 export { locateInText, type SecretLocation } from './locate';
 export { redact } from './redact';
+export { rehydrateTokens } from './rehydrate';
 export { type GhostSummary, sanitize, summarize } from './sanitize';
 export { TOKEN_RE, type TokenizeResult, tokenizeSecrets, type VaultEntry } from './tokenize';
 export type { Detection, PatternOrigin, SecretType } from './types';
@@ -32,15 +34,23 @@ function inUrl(text: string, start: number, end: number): boolean {
  * Overlapping matches are resolved by specificity (private-key > known-key >
  * env-credential, then longer match wins). Returns detections sorted by start.
  */
-export function detectSecrets(text: string, patterns: Pattern[] = PATTERNS): Detection[] {
+function* scanSecrets(text: string, patterns: Pattern[]): Generator<void, Detection[]> {
   const raw: Detection[] = [];
+  let steps = 0;
 
   for (const pattern of patterns) {
-    const regex = new RegExp(pattern.regex.source, pattern.regex.flags);
+    // A team rule may specify 'i' without 'g'. exec() would otherwise return
+    // the same match forever, freezing every paste that matches that rule.
+    const flags = pattern.regex.flags;
+    const regex = new RegExp(pattern.regex.source, flags.includes('g') ? flags : `${flags}g`);
     let m: RegExpExecArray | null;
     while ((m = regex.exec(text)) !== null) {
+      if (++steps % 256 === 0) yield;
       if (m[0].length === 0) {
-        regex.lastIndex++; // guard against zero-width loops
+        // Advance a full code point for Unicode rules; advancing into a
+        // surrogate pair lets exec() rewind and repeat the same empty match.
+        const unicode = flags.includes('u') || flags.includes('v');
+        regex.lastIndex += unicode && (text.codePointAt(regex.lastIndex) ?? 0) > 0xffff ? 2 : 1;
         continue;
       }
       if (validateMatch(pattern.validate, m[0])) {
@@ -62,6 +72,7 @@ export function detectSecrets(text: string, patterns: Pattern[] = PATTERNS): Det
         raw.push(det);
       }
     }
+    yield;
   }
 
   // Resolve overlaps: prefer higher rank, then longer match.
@@ -84,6 +95,7 @@ export function detectSecrets(text: string, patterns: Pattern[] = PATTERNS): Det
   const claimed = new Uint8Array(text.length);
   const kept: Detection[] = [];
   for (const det of raw) {
+    if (++steps % 256 === 0) yield;
     let free = true;
     for (let i = det.start; i < det.end; i++) {
       if (claimed[i]) {
@@ -97,4 +109,31 @@ export function detectSecrets(text: string, patterns: Pattern[] = PATTERNS): Det
   }
 
   return kept.sort((a, b) => a.start - b.start);
+}
+
+/** Synchronous small-paste API; shares matching/ordering with the cooperative scan. */
+export function detectSecrets(text: string, patterns: Pattern[] = PATTERNS): Detection[] {
+  const scan = scanSecrets(text, patterns);
+  let result = scan.next();
+  while (!result.done) result = scan.next();
+  return result.value;
+}
+
+/** Scan whole-text rules without splitting matches at arbitrary chunk boundaries. */
+export async function detectSecretsAsync(
+  text: string,
+  patterns: Pattern[],
+  signal: AbortSignal,
+): Promise<Detection[]> {
+  let sliceStart = performance.now();
+  const scan = scanSecrets(text, patterns);
+  for (;;) {
+    signal.throwIfAborted();
+    const result = scan.next();
+    if (result.done) return result.value;
+    if (performance.now() - sliceStart >= 8) {
+      await yieldToBrowser(signal);
+      sliceStart = performance.now();
+    }
+  }
 }

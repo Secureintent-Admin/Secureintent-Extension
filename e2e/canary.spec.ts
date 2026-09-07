@@ -10,5 +10,5 @@ test('extension loads (service worker registered)', async ({ extensionId }) => {
 test('popup renders', async ({ context, extensionId }) => {
   const page = await context.newPage();
   await page.goto(`chrome-extension://${extensionId}/popup.html`);
-  await expect(page.getByText(/SecureIntent/i)).toBeVisible();
+  await expect(page.locator('.si-wordmark')).toBeVisible();
 });

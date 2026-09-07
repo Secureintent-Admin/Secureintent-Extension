@@ -54,6 +54,22 @@
   background: linear-gradient(90deg, transparent, rgba(114, 255, 255, 0.55), transparent);
 }
 
+.si-paste-status {
+  box-sizing: border-box;
+  padding: 24px;
+  gap: 16px;
+  color: var(--si-text);
+}
+.si-paste-status h2 {
+  margin: 0;
+  font-family: var(--si-mono);
+  font-size: 18px;
+}
+.si-paste-status p {
+  margin: 0;
+  color: var(--si-muted);
+  line-height: 1.5;
+}
 @keyframes si-pop {
   from {
     transform: translateY(8px) scale(0.98);
@@ -666,4 +682,8 @@
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--si-border);
   border-radius: 8px;
+}
+
+.si-paste-status .si-btn {
+  align-self: flex-start;
 }

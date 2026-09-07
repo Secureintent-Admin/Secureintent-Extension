@@ -8,8 +8,8 @@ import { allowVaultInContentScripts } from '@/lib/vault';
 import { syncConfig } from '@/services/configService';
 import {
   consumeUsage,
-  enforceEntitlementBinding,
   getUsageStatus,
+  invalidateEntitlementRefresh,
   refreshEntitlementBg,
 } from '@/services/entitlementBackground';
 import { markInstallPending, reportInstall, syncUninstallUrl } from '@/services/installAttribution';
@@ -65,9 +65,10 @@ export default defineBackground(() => {
   let entRefreshTimer: ReturnType<typeof setTimeout> | undefined;
   browser.storage.onChanged.addListener((changes) => {
     if (!Object.keys(changes).some((k) => k.toLowerCase().includes('clerk'))) return;
+    invalidateEntitlementRefresh(); // invalidate immediately, before the debounce
     clearTimeout(entRefreshTimer);
     entRefreshTimer = setTimeout(() => {
-      refreshEntitlementBg().then(() => enforceEntitlementBinding());
+      void refreshEntitlementBg();
     }, 500); // debounce Clerk's burst of session writes
   });
 
@@ -76,12 +77,12 @@ export default defineBackground(() => {
   syncConfig();
   // Sync plan on startup, then drop any cached entitlement that isn't for the
   // currently signed-in user (a signed blob is otherwise portable between installs).
-  refreshEntitlementBg().then(() => enforceEntitlementBinding());
+  void refreshEntitlementBg();
   browser.alarms.create(SYNC_ALARM.name, { periodInMinutes: SYNC_ALARM.periodInMinutes });
   browser.alarms.onAlarm.addListener((a) => {
     if (a.name === SYNC_ALARM.name) {
       syncConfig();
-      refreshEntitlementBg().then(() => enforceEntitlementBinding()); // ride the existing 2h alarm
+      void refreshEntitlementBg(); // ride the existing 2h alarm
       reportInstall(); // retry an install report that couldn't send (offline at install)
     }
   });
@@ -145,9 +146,7 @@ export default defineBackground(() => {
     }
     // Popup asked to refresh the entitlement (e.g. after sign-in / returning from checkout).
     if (type === 'si-refresh-entitlement') {
-      refreshEntitlementBg()
-        .then((r) => enforceEntitlementBinding().then(() => r))
-        .then(sendResponse);
+      refreshEntitlementBg().then(sendResponse);
       return true;
     }
     handleRefreshMessage(msg).then(sendResponse);

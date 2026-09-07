@@ -1,4 +1,5 @@
 import { API_BASE } from '@/lib/api/client';
+import { abortable } from '@/lib/async';
 import { verifyBundle } from '@/lib/config/verify';
 import { siDebug, siError } from '@/lib/debug';
 import { entitlementItem } from './store';
@@ -30,10 +31,13 @@ function jwtSub(token: string): string | null {
  */
 export async function refreshEntitlement(
   getToken: () => Promise<string | null>,
+  signal?: AbortSignal,
 ): Promise<RefreshResult> {
   let token: string | null;
   try {
-    token = await getToken();
+    signal?.throwIfAborted();
+    token = await (signal ? abortable(getToken(), signal) : getToken());
+    signal?.throwIfAborted();
   } catch (err) {
     return { status: 'error', error: err instanceof Error ? err.message : String(err) };
   }
@@ -47,6 +51,7 @@ export async function refreshEntitlement(
     const res = await fetch(`${API_BASE}/v1/entitlement`, {
       headers: { Authorization: `Bearer ${token}` },
       cache: 'no-store',
+      signal,
     });
     if (!res.ok) return { status: 'error', error: `HTTP ${res.status}` };
 
@@ -58,7 +63,9 @@ export async function refreshEntitlement(
     // Verify against — and later persist — this exact string, so the read-time
     // check uses identical bytes (a storage round-trip can reorder a re-stringify).
     const payload = JSON.stringify(entitlement);
-    if (!signature || !(await verifyBundle(payload, signature))) {
+    const valid = signature && (await verifyBundle(payload, signature));
+    signal?.throwIfAborted(); // a late result must not overwrite a newer session
+    if (!valid) {
       siError('entitlement', 'signature verification failed; clearing', null);
       await entitlementItem.setValue(null);
       return { status: 'cleared', error: 'bad signature' };

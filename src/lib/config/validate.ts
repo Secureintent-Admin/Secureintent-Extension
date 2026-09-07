@@ -1,17 +1,11 @@
 import type { ConfigBundle } from './types';
 
-/**
- * Types this build knows how to rank. A pattern carrying anything else is still
- * accepted — see below.
- */
-const TYPES = new Set(['known-key', 'private-key', 'env-credential', 'pii', 'high-entropy']);
-
 function validPattern(v: unknown): boolean {
   if (typeof v !== 'object' || v === null) return false;
   const p = v as Record<string, unknown>;
   if (typeof p.regex !== 'string' || p.regex.length === 0) return false;
   if (typeof p.label !== 'string') return false;
-  // Any non-empty string is accepted, not just the list above.
+  // Any non-empty type string is accepted.
   //
   // This used to reject, and rejecting is what makes adding a type expensive:
   // `validateBundle` fails the WHOLE bundle on one bad pattern, so the day we
