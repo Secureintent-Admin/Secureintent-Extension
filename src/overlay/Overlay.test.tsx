@@ -19,6 +19,21 @@ function renderOverlay(onAction: (a: OverlayAction) => void = () => {}, pro = tr
 afterEach(() => document.body.replaceChildren());
 
 describe('Overlay', () => {
+  test('uses bounded worker previews and precomputed locations with the full count', () => {
+    render(
+      <Overlay
+        site="ChatGPT"
+        text={text}
+        detections={detections}
+        findingCount={500}
+        locations={[{ line: 99, snippet: 'masked preview' }]}
+        onAction={() => {}}
+      />,
+    );
+    expect(screen.getByText(/Showing 1 of 500 findings/)).toBeTruthy();
+    expect(screen.getByText(/line 99/)).toBeTruthy();
+    expect(screen.getAllByText('OpenAI API key')).toHaveLength(1);
+  });
   test('shows each detection label and an accessible name with the site', () => {
     renderOverlay();
     expect(screen.getByText('OpenAI API key')).toBeTruthy();

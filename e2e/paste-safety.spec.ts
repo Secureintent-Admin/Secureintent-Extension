@@ -107,3 +107,105 @@ test('a rule with only case-insensitive flags warns without an infinite scan', a
   await expect(page.locator('#ta')).toHaveValue('');
   await page.close();
 });
+
+// Never execute this intentionally pathological expression on the page thread.
+// The extension's external watchdog must terminate the dedicated worker.
+async function seedSlowRule(context: import('@playwright/test').BrowserContext) {
+  await context.serviceWorkers()[0].evaluate(
+    (bundle) =>
+      chrome.storage.local.set({
+        si_config: {
+          ...bundle,
+          patterns: [
+            ...bundle.patterns,
+            {
+              type: 'known-key',
+              label: 'Slow test rule',
+              regex: '(a+)+$',
+              flags: 'g',
+              origin: 'team',
+            },
+          ],
+        },
+      }),
+    DEFAULT_BUNDLE,
+  );
+}
+
+test('a catastrophic regex cannot freeze the page or popup and times out closed', async ({
+  context,
+  extensionId,
+}) => {
+  await seedSlowRule(context);
+  const page = await context.newPage();
+  await page.route(SITE, (r) =>
+    r.fulfill({
+      contentType: 'text/html',
+      body: HTML,
+      headers: {
+        'Content-Security-Policy':
+          "default-src 'none'; script-src 'none'; worker-src 'none'; frame-src 'none'",
+      },
+    }),
+  );
+  await page.goto(SITE);
+  await page.evaluate(() => {
+    document.body.dataset.beats = '0';
+    setInterval(() => {
+      document.body.dataset.beats = String(Number(document.body.dataset.beats) + 1);
+    }, 20);
+  });
+  await page.locator('#ta').click();
+  await paste(page, `${'a'.repeat(40)}!`);
+  const status = page.locator('secureintent-paste-status');
+  await expect(status.getByText('Checking paste…', { exact: true })).toBeVisible();
+  const before = await page.evaluate(() => Number(document.body.dataset.beats));
+  await expect
+    .poll(() => page.evaluate(() => Number(document.body.dataset.beats)), { timeout: 2000 })
+    .toBeGreaterThan(before + 15);
+  const popup = await context.newPage();
+  await popup.goto(`chrome-extension://${extensionId}/popup.html`);
+  await expect(popup.locator('.si-wordmark')).toBeVisible({ timeout: 2000 });
+  await popup.close();
+  await expect(status.getByText('Paste could not be completed', { exact: true })).toBeVisible({
+    timeout: 8000,
+  });
+  await expect(page.locator('#ta')).toHaveValue('');
+  await page.screenshot({ path: test.info().outputPath('worker-timeout.png') });
+  await status.getByRole('button', { name: 'Dismiss' }).click();
+  await page.locator('#ta').click();
+  await paste(page, SECRET);
+  await expect(page.locator('secureintent-overlay')).toHaveCount(1);
+  await expect(page.locator('#ta')).toHaveValue('');
+  await page.close();
+});
+
+test('Escape cancels a running regex without waiting for the watchdog', async ({ context }) => {
+  await seedSlowRule(context);
+  const page = await context.newPage();
+  await page.route(SITE, (r) => r.fulfill({ contentType: 'text/html', body: HTML }));
+  await page.goto(SITE);
+  await page.locator('#ta').click();
+  await paste(page, `${'a'.repeat(40)}!`);
+  await expect(page.locator('secureintent-paste-status')).toHaveCount(1);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('secureintent-paste-status')).toHaveCount(0, { timeout: 1500 });
+  await expect(page.locator('#ta')).toHaveValue('');
+  await page.locator('#ta').click();
+  await paste(page, 'ordinary safe message');
+  await expect(page.locator('#ta')).toHaveValue('ordinary safe message', { timeout: 2000 });
+  await page.close();
+});
+
+test('checked clean text replaces the original selection exactly once', async ({ context }) => {
+  const page = await context.newPage();
+  await page.route(SITE, (r) => r.fulfill({ contentType: 'text/html', body: HTML }));
+  await page.goto(SITE);
+  await page.locator('#ta').fill('before OLD after');
+  await page
+    .locator('#ta')
+    .evaluate((input: HTMLTextAreaElement) => input.setSelectionRange(7, 10));
+  await paste(page, 'NEW');
+  await expect(page.locator('#ta')).toHaveValue('before NEW after');
+  await page.close();
+});

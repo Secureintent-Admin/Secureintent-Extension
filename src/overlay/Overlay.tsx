@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Logo } from '@/components/Logo';
-import { type Detection, type GhostSummary, locateInText } from '@/lib/detection';
+import {
+  type Detection,
+  type GhostSummary,
+  locateInText,
+  type SecretLocation,
+} from '@/lib/detection';
 
 export type OverlayAction = 'paste' | 'redact' | 'cancel' | 'sanitize' | 'upgrade' | 'rehydrate';
 
@@ -22,6 +27,9 @@ export interface OverlayProps {
   site: string;
   text: string;
   detections: Detection[];
+  /** Full count; worker-backed previews are bounded independently of protection. */
+  findingCount?: number;
+  locations?: SecretLocation[];
   /** When set, render the compact Ghost summary instead of a per-finding list. */
   summary?: GhostSummary;
   /** When set, render the rehydrate prompt (pasted text contains our tokens). */
@@ -52,6 +60,8 @@ export function Overlay({
   site,
   text,
   detections,
+  findingCount = detections.length,
+  locations,
   summary,
   rehydrate,
   pro = false, // fail-closed: a caller that omits `pro` gets the free (upgrade) UI
@@ -77,7 +87,7 @@ export function Overlay({
       <PolicyBlockView
         site={site}
         host={policyBlock.host}
-        findings={detections.length}
+        findings={findingCount}
         onAction={onAction}
       />
     );
@@ -127,7 +137,7 @@ export function Overlay({
         <ul className="si-findings">
           {detections.map((d, i) => {
             const open = expanded === i;
-            const loc = locateInText(text, d);
+            const loc = locations?.[i] ?? locateInText(text, d);
             return (
               <li key={i} className="si-finding">
                 <button
@@ -166,6 +176,13 @@ export function Overlay({
             );
           })}
         </ul>
+
+        {findingCount > detections.length && (
+          <p className="si-policy-note">
+            Showing {detections.length} of {findingCount} findings. Anonymization still covers all
+            findings.
+          </p>
+        )}
 
         {blockRawPaste && (
           <p className="si-policy-note">

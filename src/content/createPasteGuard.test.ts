@@ -2,6 +2,9 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
 import { type BundlePolicy, DEFAULT_BUNDLE, saveBundle } from '@/lib/config';
 import { acceptTerms, consentItem } from '@/lib/consent';
+import { createPasteProcessor } from '@/lib/paste/client';
+import { createPasteComputation } from '@/lib/paste/process';
+import type { PasteCommand } from '@/lib/paste/protocol';
 import { consumeAnonymize, getAnonymizeStatus } from '@/lib/quota';
 import type { OverlayAction } from '@/overlay/Overlay';
 import * as telemetryService from '@/services/telemetryService';
@@ -52,6 +55,23 @@ vi.mock('@/lib/quota', () => ({
 }));
 
 const SECRET = 'sk-' + 'a'.repeat(30);
+
+// Unit tests exercise the real computation without a browser worker. Separate
+// host/client tests and Chromium tests cover thread, IPC, and timeout behavior.
+vi.mock('@/lib/paste/client', () => ({ createPasteProcessor: vi.fn() }));
+beforeEach(() => {
+  vi.mocked(createPasteProcessor).mockReset();
+  vi.mocked(createPasteProcessor).mockImplementation(async (signal) => {
+    signal.throwIfAborted();
+    const compute = createPasteComputation();
+    return {
+      async request(operation, input) {
+        signal.throwIfAborted();
+        return compute({ id: 1, operation, input } as PasteCommand) as never;
+      },
+    };
+  });
+});
 
 // Real paste events expose composedPath() (target + ancestors); the guard reads it
 // instead of e.target so shadow-DOM composers are reachable. Mirror that here.
@@ -157,13 +177,18 @@ describe('createPasteGuard', () => {
     expect(await consentItem.getValue()).toBeNull(); // still not accepted
   });
 
-  test('lets a clean paste through without blocking', async () => {
+  test('inserts a clean paste only after the worker scan completes', async () => {
     const t = setup();
     await t.start();
     const e = t.makeEvent('just a normal message');
     await t.firePaste(e);
 
-    expect(e.preventDefault).not.toHaveBeenCalled();
+    expect(e.preventDefault).toHaveBeenCalled();
+    expect(document.execCommand).toHaveBeenCalledExactlyOnceWith(
+      'insertText',
+      false,
+      'just a normal message',
+    );
     expect(mountOverlayMock).not.toHaveBeenCalled();
   });
 
@@ -177,6 +202,21 @@ describe('createPasteGuard', () => {
     expect(mountOverlayMock).toHaveBeenCalledTimes(1);
     expect(mountOverlayMock.mock.calls[0][1].site).toBe('ChatGPT');
     expect(mountOverlayMock.mock.calls[0][1].detections).toHaveLength(1);
+  });
+
+  test('worker startup failure stays blocked and dismissal allows a fresh checked paste', async () => {
+    vi.mocked(createPasteProcessor).mockRejectedValueOnce(new Error('worker unavailable'));
+    const t = setup();
+    await t.start();
+    const event = t.makeEvent(SECRET);
+    await t.firePaste(event);
+    expect(event.preventDefault).toHaveBeenCalled();
+    expect(document.execCommand).not.toHaveBeenCalled();
+    expect(mountOverlayMock).not.toHaveBeenCalled();
+    expect(mountPasteStatusMock.mock.calls.at(-1)![1]).toBe('error');
+    mountPasteStatusMock.mock.calls.at(-1)![2]();
+    await t.firePaste(t.makeEvent(SECRET));
+    expect(mountOverlayMock).toHaveBeenCalledTimes(1);
   });
 
   test('does not block when protection is disabled', async () => {
@@ -276,6 +316,19 @@ describe('createPasteGuard', () => {
     expect(mountPasteStatusMock.mock.calls.at(-1)![1]).toBe('error');
   });
 
+  test('a failed or expired transformation worker does not consume allowance', async () => {
+    const t = setup();
+    await t.start();
+    await t.firePaste(t.makeEvent(SECRET));
+    const processor = await vi.mocked(createPasteProcessor).mock.results.at(-1)!.value;
+    vi.spyOn(processor, 'request').mockRejectedValueOnce(new Error('worker expired'));
+    vi.mocked(consumeAnonymize).mockClear();
+    await lastOnAction()('redact');
+    expect(consumeAnonymize).not.toHaveBeenCalled();
+    expect(document.execCommand).not.toHaveBeenCalled();
+    expect(mountPasteStatusMock.mock.calls.at(-1)![1]).toBe('error');
+  });
+
   test('cancelling while the action status mounts does not consume quota', async () => {
     const t = setup();
     await t.start();
@@ -329,7 +382,8 @@ describe('createPasteGuard', () => {
     mountPasteStatusMock.mock.calls.at(-1)![2]();
     const clean = t.makeEvent('ordinary text');
     await t.firePaste(clean);
-    expect(clean.preventDefault).not.toHaveBeenCalled();
+    expect(clean.preventDefault).toHaveBeenCalled();
+    expect(document.execCommand).toHaveBeenCalledWith('insertText', false, 'ordinary text');
   });
 
   test('cancelling a status while it mounts removes the late UI and never inserts', async () => {
@@ -357,7 +411,7 @@ describe('createPasteGuard', () => {
     expect(document.execCommand).not.toHaveBeenCalled();
   });
 
-  test('a cooperatively scanned clean paste inserts once after checking', async () => {
+  test('a worker-scanned large clean paste inserts once after checking', async () => {
     const t = setup();
     await t.start();
     const text = 'ordinary text '.repeat(Math.ceil(ASYNC_PASTE_CHARS / 14));
@@ -591,12 +645,16 @@ describe('createPasteGuard', () => {
     const e = t.makeEvent(`const key = "${token}";`);
     await t.firePaste(e);
 
-    // No rehydrate prompt and the paste isn't intercepted — the tokens fall through
-    // to a normal browser paste; the secret is never restored for a free user.
+    // No rehydrate prompt: insert the checked tokens, never the original secret.
     expect(mountOverlayMock.mock.calls.length).toBe(overlaysBefore);
-    expect(e.preventDefault).not.toHaveBeenCalled();
+    expect(e.preventDefault).toHaveBeenCalled();
     expect((document.execCommand as ReturnType<typeof vi.fn>).mock.calls.length).toBe(
-      insertsBefore,
+      insertsBefore + 1,
+    );
+    expect(document.execCommand).toHaveBeenLastCalledWith(
+      'insertText',
+      false,
+      `const key = "${token}";`,
     );
   });
 
@@ -606,8 +664,12 @@ describe('createPasteGuard', () => {
     const e = t.makeEvent('just some normal pasted text');
     await t.firePaste(e);
 
-    expect(e.preventDefault).not.toHaveBeenCalled();
-    expect(document.execCommand).not.toHaveBeenCalled();
+    expect(e.preventDefault).toHaveBeenCalled();
+    expect(document.execCommand).toHaveBeenCalledExactlyOnceWith(
+      'insertText',
+      false,
+      'just some normal pasted text',
+    );
   });
 
   test('large paste routes to Ghost: summary overlay, Sanitize & paste strips IPs/emails', async () => {
@@ -655,7 +717,12 @@ describe('createPasteGuard', () => {
     const e = t.makeEvent('lorem ipsum dolor sit amet '.repeat(120));
     await t.firePaste(e);
 
-    expect(e.preventDefault).not.toHaveBeenCalled();
+    expect(e.preventDefault).toHaveBeenCalled();
+    expect(document.execCommand).toHaveBeenCalledExactlyOnceWith(
+      'insertText',
+      false,
+      'lorem ipsum dolor sit amet '.repeat(120),
+    );
     expect(mountOverlayMock).not.toHaveBeenCalled();
   });
 
@@ -780,7 +847,8 @@ describe('createPasteGuard', () => {
     await t.start();
     const e = t.makeEvent(`hash ${HASH} end`);
     await t.firePaste(e);
-    expect(e.preventDefault).not.toHaveBeenCalled();
+    expect(e.preventDefault).toHaveBeenCalled();
+    expect(document.execCommand).toHaveBeenCalledWith('insertText', false, `hash ${HASH} end`);
     expect(mountOverlayMock).not.toHaveBeenCalled();
   });
 
@@ -871,8 +939,8 @@ describe('createPasteGuard — team policy', () => {
       const e = t.makeEvent(token);
       await t.firePaste(e);
       expect(mountOverlayMock).not.toHaveBeenCalled();
-      expect(document.execCommand).not.toHaveBeenCalled();
-      expect(e.preventDefault).not.toHaveBeenCalled(); // inert tokens can still paste
+      expect(document.execCommand).toHaveBeenCalledExactlyOnceWith('insertText', false, token);
+      expect(e.preventDefault).toHaveBeenCalled(); // inert tokens insert after scanning
     });
     test('a second paste cannot bypass the team block', async () => {
       await savePolicy({ blockInsteadOfWarn: true });

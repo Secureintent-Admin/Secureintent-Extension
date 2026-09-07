@@ -4,6 +4,7 @@ import { sendBrowserUrl, sendHandledHash } from '@/lib/bridge/client';
 import { browserAction } from '@/lib/browserAction';
 import { ACCOUNT_URL } from '@/lib/clerkConfig';
 import { consentItem, isConsentAccepted } from '@/lib/consent';
+import { PASTE_READY } from '@/lib/paste/protocol';
 import { allowVaultInContentScripts } from '@/lib/vault';
 import { syncConfig } from '@/services/configService';
 import {
@@ -13,6 +14,7 @@ import {
   refreshEntitlementBg,
 } from '@/services/entitlementBackground';
 import { markInstallPending, reportInstall, syncUninstallUrl } from '@/services/installAttribution';
+import { installPasteWorkerBackground } from '@/services/pasteWorkerBackground';
 import { handleRefreshMessage, SYNC_ALARM } from '@/services/scheduler';
 import { isBridgeEnabled } from '@/settings';
 
@@ -29,6 +31,7 @@ async function updateConsentBadge() {
 }
 
 export default defineBackground(() => {
+  installPasteWorkerBackground();
   // First install → open the welcome/consent page. Any startup → refresh the
   // consent badge (nag until Terms & Privacy are accepted).
   browser.runtime.onInstalled.addListener((details) => {
@@ -88,6 +91,7 @@ export default defineBackground(() => {
   });
   browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     const type = (msg as { type?: string })?.type;
+    if (type === PASTE_READY) return false; // the private worker setup listener owns this response
     // Per-tab badge: a content script reports how many secrets it just caught.
     if (type === 'si-detected' && sender.tab?.id != null) {
       bumpBadge(sender.tab.id, (msg as { count?: number }).count ?? 1);

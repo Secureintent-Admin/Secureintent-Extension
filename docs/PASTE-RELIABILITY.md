@@ -12,23 +12,31 @@ Text mixing existing tokens with new raw secrets now receives the ordinary secre
 
 Detection now forces global iteration even when a configured rule only specifies flags such as `i`. Such rules previously could loop forever. Empty Unicode matches advance a complete code point so they cannot repeat inside a surrogate pair.
 
-Concurrent account refresh callers now share the token request, entitlement fetch and identity check. Session-storage changes invalidate the previous request immediately; late responses cannot overwrite a newer session. Entitlement and usage requests have 10-second deadlines. Anonymization checks the actual quota-consumption result before insertion.
+The worker follow-up (2026-09-08) closes a limitation in the first fix (`6115a74`): cooperative yielding cannot interrupt a single slow regex. Every guarded text paste now runs detection, overlap resolution, preview-location preparation, bridge hashing, sanitization, tokenization and restoration in a dedicated Web Worker. None of these operations falls back to the page thread if the worker is unavailable.
+
+Chrome uses a private offscreen document to host workers (new `offscreen` permission; Chrome 109+). Firefox MV2 uses its existing background document. Clipboard data travels only over private extension runtime ports, never page/window messaging; no worker assets are web-accessible. Worker code has no network or storage calls. The paste and its full match set are retained in worker RAM only until completion, cancellation, disconnect or idle expiry. This remains standalone browser protection, without a Rust daemon. See [Chrome offscreen API](https://developer.chrome.com/docs/extensions/reference/api/offscreen) for the hosting mechanism.
+
+Concurrent account refresh callers now share the token request, entitlement fetch and identity check. Session-storage changes invalidate the previous request immediately; late responses cannot overwrite a newer session. Entitlement and usage requests have 10-second deadlines. Anonymization prepares the masked text before consuming allowance (so worker failure does not charge it), then checks the actual quota-consumption result before insertion.
 
 ## User-visible behavior
 
-- Pastes of 64,000 characters or more are intercepted before awaiting anything and show a cancellable checking state. The scanner shares its rules and ordering with the synchronous engine and yields between batches when a processing slice reaches approximately 8 ms.
+- All guarded text pastes are intercepted before awaiting anything. Pastes of 64,000 characters or more show checking immediately; smaller pastes show it if worker setup/scanning takes over 120 ms.
+- A watchdog outside each worker terminates a processing command after 5 seconds. A separate 10-second client deadline covers failed setup or lost messaging. No partial or unchecked text is inserted on failure. Cancellation disconnects the port and terminates the worker rather than merely hiding the warning.
+- At most four worker sessions are retained at once; unused sessions expire after two minutes. Capacity or timeout errors leave the paste blocked and dismissible. Limits of 256 rules, 8,192 characters per regex source and 100,000 raw findings bound processing resources; exceeding them is an error, not a partial scan.
 - Pastes longer than 2 million JavaScript string characters are blocked with a message asking for a smaller section. They are never silently truncated or inserted unchecked.
 - Cancellation, composer edits, page hiding and extension invalidation discard pending work. Removed composers cannot receive old actions.
 - Errors after interception leave the paste blocked and show a dismissible message where the UI is available. This intentionally replaces automatic raw-text reinsertion on a warning failure.
-- Team destination blocks and raw-paste restrictions continue to apply. Ordinary small, clean pastes retain native browser insertion.
+- Team destination blocks and raw-paste restrictions continue to apply. Clean text inserts once after scanning and replaces the selection captured before the asynchronous work. Guarded text is inserted as plain text: rich clipboard HTML formatting is not replayed. Image-only clipboard events with no plain text retain their previous native behavior.
+- Previews show at most 100 findings with an explicit full-count notice; large logs send a compact category summary. Transformations still use the entire match set, not just the preview. Per-finding telemetry is suppressed when the preview is capped, as it already was for Ghost pastes, to avoid submitting a misleading partial event. Feature hooks receive full counts and distinct types/labels.
 
 ## Validation
 
-- 525 unit tests across 50 files passed, including output-equivalence, performance, repeated-paste, cancellation, quota, policy and session-refresh cases.
+- 548 unit tests across 54 files passed. The worker follow-up adds processing, IPC, host lifecycle, preview, fail-closed, quota-ordering and offscreen-creation regressions to the initial 525-test suite.
 - TypeScript checks passed.
-- Nine Chromium end-to-end tests passed: popup rendering, supported fallback inputs, existing detection categories, repeated-paste protection, oversized-paste recovery, large clean insertion and non-global rule handling.
-- A separate fresh-profile check passed with 15 lightweight test tabs. The 1.78-million-character warning appeared in about 295 ms and cancellation completed in about 227 ms. No long task was recorded during that paste in this run, compared with an 82 ms long task in the baseline.
-- The same isolated 20,000-token restoration benchmark improved from approximately 29,896 ms to 8.8 ms, with correct output. Existing detection, sanitization and tokenization performance remained comparable to v1.0.14. Measurements are single diagnostic runs, not performance guarantees.
+- Twelve Chromium end-to-end tests passed, including a deliberately catastrophic `(a+)+$` regex on a short paste under restrictive page CSP. The page heartbeat and popup remained responsive while the worker ran; the watchdog blocked the failed paste and a subsequent secret paste was still protected. Escape cancellation and replacement of a selected text range are covered too.
+- Historical measurement on the initial cooperative fix (`6115a74`): a separate fresh-profile check passed with 15 lightweight test tabs. The 1.78-million-character warning appeared in about 295 ms and cancellation completed in about 227 ms. No long task was recorded during that paste in this run, compared with an 82 ms long task in the baseline. These timings do not describe worker IPC overhead in the follow-up.
+- A follow-up fresh-profile check also passed normal anonymization and the 1.78-million-character warning/cancel case with 15 lightweight tabs, with no page long task recorded during that paste. It used synthetic text and disabled production endpoints, not a real signed-in account.
+- Historical pure-algorithm benchmark: 20,000-token restoration improved from approximately 29,896 ms to 8.8 ms with correct output, before adding worker IPC. Measurements are single diagnostic runs, not performance guarantees.
 - Chrome and Firefox production builds were checked. Runtime browser checks used Chromium, not Firefox.
 - Lint has no errors; three pre-existing popup CSS `!important` warnings remain. Existing Clerk build warnings concern `import.meta` in an IIFE and large chunks.
 
@@ -52,4 +60,4 @@ Before making a release artifact, rebuild with the intended production configura
 
 The screenshot user's exact whole-browser incident has not been reproduced. The authenticated Clerk toolbar panel and full Pro restoration UI were not exercised with a real account; refresh races were tested using controlled session/network fixtures. Fifteen lightweight test pages do not represent fifteen heavy development applications.
 
-Scanning remains local and cooperatively scheduled on the page thread; this change does not introduce a Web Worker or a Rust dependency. A single regular-expression execution and the browser/editor's final DOM insertion cannot be preempted by cooperative yielding. Custom rules still require review for pathological backtracking; this is not a hard execution-time guarantee for arbitrary regexes.
+The page no longer executes scanning or transformation regexes. The browser/editor's final DOM insertion still runs on the page thread, as do bounded IPC serialization and rendering. An expensive host-editor paste handler, memory pressure or unrelated application code can still cause a stall; this is not a guarantee that arbitrary websites never freeze. Custom rules should still be reviewed: pathological rules now time out and block that paste instead of locking the page. Background timer throttling or OS suspension can delay wall-clock deadlines.

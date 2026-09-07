@@ -36,6 +36,7 @@ export default defineConfig({
       ...(isFirefox
         ? {}
         : {
+            minimum_chrome_version: '109', // private offscreen Worker host
             key: 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA6OipE3Igc3/YZr0H+I3aWot4xOqHvMyGHWuoyxpfIv6gISMyk2tWNjqAmSeMULt1EBgXvv44xdFPfWP8KUtbcr3tEgADXWFB0L6zI6GbFVdtm4Y3T/iXGLGQ3SN+yZQFPHQppY/NtXhM7d0LkAfXgL/pE6BySJzD1k8O/xlmRBuTjIOG538B5atOQO//YTSVDkKkJH9ZhOPqsbdyq5qc3R01szbD1oa2cBcteNpseI0Xp0X1LJLCq2ESfZKYxvzYJAaE7bQTcof4WUQL87gKN87NR2fQzIlwmYDg6n4BHDfwuUi3fNyuIlOemw9ugf+bSQYlsgqxdIT80GRW+M5eVwIDAQAB',
           }),
       name: 'SecureIntent',
@@ -45,7 +46,13 @@ export default defineConfig({
       // is being protected. No broad tabs permission needed.
       // cookies: required by @clerk/chrome-extension to read/sync the Clerk session
       // from the Sync Host (secureintent.ai) and the Frontend API domain.
-      permissions: ['storage', 'alarms', 'activeTab', 'cookies'],
+      permissions: [
+        'storage',
+        'alarms',
+        'activeTab',
+        'cookies',
+        ...(isFirefox ? [] : ['offscreen']),
+      ],
       // Privileged access to our Worker so the background config sync + content-script
       // telemetry fetches bypass page CORS, plus the Clerk Frontend API for auth.
       host_permissions: [

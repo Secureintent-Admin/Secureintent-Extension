@@ -1,21 +1,9 @@
 import { browser, type ContentScriptContext, storage } from '#imports';
-import { abortable, withDeadline, yieldToBrowser } from '@/lib/async';
-import { contentHash } from '@/lib/bridge/hash';
+import { abortable, withDeadline } from '@/lib/async';
 import { DEFAULT_BUNDLE, getActiveBundle, getPolicy, isBlockedHost } from '@/lib/config';
 import { acceptTerms, consentItem, consentSatisfied, isConsentAccepted } from '@/lib/consent';
 import { elapsedMs, siDebug, siError } from '@/lib/debug';
-import {
-  compilePatterns,
-  detectSecrets,
-  detectSecretsAsync,
-  GHOST_EXTRA_PATTERNS,
-  GHOST_MIN_CHARS,
-  rehydrateTokens,
-  sanitize,
-  summarize,
-  TOKEN_RE,
-  tokenizeSecrets,
-} from '@/lib/detection';
+import { compilePatterns, GHOST_EXTRA_PATTERNS, GHOST_MIN_CHARS, TOKEN_RE } from '@/lib/detection';
 import { getEntitlementSnapshot, hasFeatureCached, initEntitlementCache } from '@/lib/entitlement';
 import { notifyAction, notifyDetections } from '@/lib/features';
 import {
@@ -24,6 +12,8 @@ import {
   getOrCreateSalt,
   type KeyValueStore,
 } from '@/lib/fingerprint';
+import { createPasteProcessor } from '@/lib/paste/client';
+import { MAX_PASTE_CHARS, type PasteProcessor, type ScanResult } from '@/lib/paste/protocol';
 import { consumeAnonymize, formatQuotaReset, getAnonymizeStatus } from '@/lib/quota';
 import type { TelemetryAction } from '@/lib/telemetry/types';
 import { type VaultStore, vaultPut, vaultSnapshot } from '@/lib/vault';
@@ -49,7 +39,8 @@ const sessionStore: VaultStore = {
   get: async (key) => (await storage.getItem<string>(`session:${key}`)) ?? undefined,
   set: (key, value) => storage.setItem(`session:${key}`, value),
 };
-export const MAX_PASTE_CHARS = 2_000_000;
+
+export { MAX_PASTE_CHARS } from '@/lib/paste/protocol';
 export const ASYNC_PASTE_CHARS = 64_000;
 
 interface PasteJob {
@@ -59,21 +50,27 @@ interface PasteJob {
   uiVersion: number;
   handled: boolean;
   inserting?: boolean;
+  selection?: { start: number; end: number } | Range;
 }
 
-function insertText(el: HTMLElement, text: string): void {
+function insertText(el: HTMLElement, text: string, selection?: PasteJob['selection']): void {
   el.focus();
   // Some sites (e.g. GitHub Copilot) select the whole field on programmatic
   // focus. Collapse any active selection first so we append at the caret
   // instead of overwriting the user's existing text.
   if (el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement) {
-    if (el.selectionStart !== el.selectionEnd) {
+    if (selection && 'start' in selection) {
+      el.setSelectionRange(selection.start, selection.end);
+    } else if (el.selectionStart !== el.selectionEnd) {
       const caret = el.selectionEnd ?? el.value.length;
       el.setSelectionRange(caret, caret);
     }
   } else {
     const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0 || !el.contains(sel.anchorNode)) {
+    if (selection instanceof Range && el.contains(selection.commonAncestorContainer)) {
+      sel?.removeAllRanges();
+      sel?.addRange(selection);
+    } else if (!sel || sel.rangeCount === 0 || !el.contains(sel.anchorNode)) {
       // Rich editors (e.g. Kimi's Lexical) drop the selection when focus moves
       // to our overlay, leaving execCommand nowhere to insert. Restore a caret
       // at the end of the editor.
@@ -174,11 +171,11 @@ export async function createPasteGuard(
       await failed(job, error);
     }
   };
-  const insert = (job: PasteJob, text: string) => {
+  const insert = (job: PasteJob, text: string, preserveSelection = false) => {
     if (!live(job) || !job.input.isConnected) return;
     job.inserting = true;
     try {
-      insertText(job.input, text);
+      insertText(job.input, text, preserveSelection ? job.selection : undefined);
     } finally {
       job.inserting = false;
     }
@@ -264,10 +261,8 @@ export async function createPasteGuard(
 
   const origin = location.origin;
 
-  // In-memory token→secret cache for rehydration. The paste handler swaps tokens
-  // back synchronously, so it reads from this Map rather than the async session
-  // vault. RAM-only, cleared on page unload; hydrated from the session vault so
-  // tokens survive a same-session page reload.
+  // RAM-only token cache; only tokens referenced by this paste are supplied to
+  // its private local worker. Hydration preserves same-session page reloads.
   const memVault = new Map<string, string>();
   vaultSnapshot(sessionStore, origin, Date.now())
     .then((snap) => {
@@ -286,6 +281,16 @@ export async function createPasteGuard(
         e.stopImmediatePropagation();
         if (!job) {
           job = { input, controller: new AbortController(), uiVersion: 0, handled: false };
+          if (input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement) {
+            if (input.selectionStart !== null && input.selectionEnd !== null) {
+              job.selection = { start: input.selectionStart, end: input.selectionEnd };
+            }
+          } else {
+            const selection = window.getSelection();
+            if (selection?.rangeCount && input.contains(selection.anchorNode)) {
+              job.selection = selection.getRangeAt(0).cloneRange();
+            }
+          }
           active = job;
         }
         return job;
@@ -316,24 +321,41 @@ export async function createPasteGuard(
           await status(intercept(), 'too-large');
           return;
         }
-        const large = text.length >= ASYNC_PASTE_CHARS;
-        if (large) {
-          const pending = intercept(); // MUST run before the first await
-          await status(pending, 'checking');
-          await yieldToBrowser(pending.controller.signal);
-        }
-
+        // Even a short paste can trigger a pathological team regex. No detector
+        // runs on the page thread, and no raw default paste may beat the scan.
+        const pending = intercept(); // MUST run before the first await
         const ghostMode = text.length >= ghostMin;
         const tDetect = performance.now();
-        const detections =
-          large && job
-            ? await detectSecretsAsync(
-                text,
-                ghostMode ? ghostPatterns : patterns,
-                job.controller.signal,
-              )
-            : detectSecrets(text, ghostMode ? ghostPatterns : patterns);
-        if (job && !live(job)) return;
+        if (text.length >= ASYNC_PASTE_CHARS) {
+          await status(pending, 'checking');
+          if (!live(pending)) return;
+        }
+        // Avoid flashing a dialog for ordinary fast scans; slow/large work is
+        // cancellable through the status and Escape throughout the operation.
+        const checkingTimer =
+          text.length < ASYNC_PASTE_CHARS
+            ? setTimeout(() => {
+                void status(pending, 'checking').catch((error) => failed(pending, error));
+              }, 120)
+            : undefined;
+        let scan: ScanResult;
+        let processor: PasteProcessor;
+        try {
+          processor = await createPasteProcessor(pending.controller.signal);
+          scan = await processor.request('scan', {
+            text,
+            patterns: (ghostMode ? ghostPatterns : patterns).map(({ regex, ...pattern }) => ({
+              ...pattern,
+              source: regex.source,
+              flags: regex.flags,
+            })),
+            summary: ghostMode,
+          });
+        } finally {
+          clearTimeout(checkingTimer);
+        }
+        if (!live(pending)) return;
+        const detections = scan.detections;
         const detectMs = elapsedMs(tDetect);
 
         // Rehydrate: if the pasted text carries our tokens, prompt to swap them
@@ -346,13 +368,22 @@ export async function createPasteGuard(
         // "keep tokens" must not become an unchecked route for those secrets.
         if (
           allowRawPaste &&
-          detections.length === 0 &&
+          scan.total === 0 &&
           hasFeatureCached('rehydrate') &&
           TOKEN_RE.test(text)
         ) {
-          const { text: restored, tokenCount: known } = rehydrateTokens(text, memVault);
+          const tokens = new Set(text.match(new RegExp(TOKEN_RE.source, 'g')) ?? []);
+          const entries: [string, string][] = [];
+          for (const token of tokens) {
+            const secret = memVault.get(token);
+            if (secret !== undefined) entries.push([token, secret]);
+          }
+          const { text: restored, tokenCount: known } = await processor.request(
+            'rehydrate',
+            entries,
+          );
+          if (!live(pending)) return;
           if (known > 0) {
-            const pending = intercept();
             await present(pending, () =>
               mountOverlay(ctx, {
                 site: config.name,
@@ -379,59 +410,54 @@ export async function createPasteGuard(
         // secret", so a clean paste must be stopped here too. Letting it through
         // would quietly break the promise the console makes to whoever set the
         // rule — and these are the sites a team has decided to feed nothing.
-        if (detections.length === 0 && !policyBlockedHost) {
-          // Small clean pastes use Chrome's native insertion. Large ones were
-          // already intercepted, so insert only after the full scan completed.
-          if (job) {
-            const checked = job;
-            await act(checked, () => insert(checked, text));
-          }
+        if (scan.total === 0 && !policyBlockedHost) {
+          // Plain-text insertion only after a complete scan, preserving the
+          // user's original selection even if focusing the site changes it.
+          await act(pending, () => insert(pending, text, true));
           return;
         }
-        const pending = intercept();
         // Show the actual secret warning for this paste. Extracted so the
         // consent gate can call it after the user agrees (first-paste consent).
         const showWarning = async () => {
           if (!live(pending)) return;
-          recordBlocked(detections.length); // popup total; on-device only
+          recordBlocked(scan.total); // popup total; on-device only
           // per-tab action badge (background owns browser.action)
-          browser.runtime
-            .sendMessage({ type: 'si-detected', count: detections.length })
-            .catch(() => {});
+          browser.runtime.sendMessage({ type: 'si-detected', count: scan.total }).catch(() => {});
 
           // Feature-hook seam: registered features observe detections (metadata
           // only — raw text is never passed). Fire-and-forget.
           const featureCtx = {
             site: config.name,
             siteKey: config.siteKey,
-            detectionCount: detections.length,
-            types: detections.map((d) => d.type),
-            labels: detections.map((d) => d.label),
+            detectionCount: scan.total,
+            types: scan.types,
+            labels: scan.labels,
           };
           notifyDetections(featureCtx);
 
           // Telemetry is per-finding (one fingerprint each). Ghost pastes can hold
           // hundreds of findings, so telemetry is skipped for them in this build.
-          const fingerprintsPromise = ghostMode
-            ? null
-            : Promise.all(
-                detections.map(async (d) => {
-                  const fingerprint = await computeFingerprint(d.match, salt);
-                  siDebug(config.name, 'fingerprint', { label: d.label, fingerprint });
-                  return { fingerprint, type: d.type, label: d.label };
-                }),
-              ).catch(
-                (
-                  err,
-                ): {
-                  fingerprint: Fingerprint;
-                  type: (typeof detections)[number]['type'];
-                  label: string;
-                }[] => {
-                  siError(config.name, 'fingerprint error, telemetry suppressed', err);
-                  return [];
-                },
-              );
+          const fingerprintsPromise =
+            ghostMode || scan.total > detections.length
+              ? null
+              : Promise.all(
+                  detections.map(async (d) => {
+                    const fingerprint = await computeFingerprint(d.match, salt);
+                    siDebug(config.name, 'fingerprint', { label: d.label, fingerprint });
+                    return { fingerprint, type: d.type, label: d.label };
+                  }),
+                ).catch(
+                  (
+                    err,
+                  ): {
+                    fingerprint: Fingerprint;
+                    type: (typeof detections)[number]['type'];
+                    label: string;
+                  }[] => {
+                    siError(config.name, 'fingerprint error, telemetry suppressed', err);
+                    return [];
+                  },
+                );
 
           // Gate the pro action for this overlay. Ghost pastes need the `ghost`
           // feature (Pro-only). Standard anonymise is free with a monthly quota,
@@ -464,7 +490,9 @@ export async function createPasteGuard(
               site: config.name,
               text,
               detections,
-              summary: ghostMode ? summarize(detections) : undefined,
+              summary: scan.summary,
+              findingCount: scan.total,
+              locations: scan.locations,
               pro: proAction,
               quotaExhausted,
               // Team policy: a blocked destination gets the notice view (no paste
@@ -492,12 +520,19 @@ export async function createPasteGuard(
                     !policyBlockedHost
                   ) {
                     // Ghost: strip every finding to a typed placeholder. Irreversible.
-                    insert(pending, sanitize(text, detections));
+                    await status(pending, 'checking');
+                    if (!live(pending)) return;
+                    const sanitized = await processor.request('sanitize', null);
+                    if (hasFeatureCached('ghost')) insert(pending, sanitized);
                   } else if (action === 'redact' && proAction && !policyBlockedHost) {
                     // The preview can become stale while the warning is open. Do
                     // not insert when the actual consume is refused or cancelled.
                     await status(pending, 'checking');
                     if (!live(pending)) return;
+                    // Prepare before consuming allowance: an expired/failed worker
+                    // must not charge a user for a paste that cannot be produced.
+                    const { text: masked, entries } = await processor.request('tokenize', null);
+                    if (!live(pending) || !input.isConnected) return;
                     const allowed = await abortable(
                       withDeadline(() => consumeAnonymize(getEntitlementSnapshot())),
                       pending.controller.signal,
@@ -506,7 +541,6 @@ export async function createPasteGuard(
                     if (!live(pending) || !input.isConnected) return;
                     // Dehydrate: replace secrets with reversible tokens and stash the
                     // token→secret map so a later paste can rehydrate them.
-                    const { text: masked, entries } = tokenizeSecrets(text, detections);
                     insert(pending, masked);
                     for (const { token, secret } of entries) memVault.set(token, secret); // sync read path
                     vaultPut(sessionStore, origin, entries, Date.now()).catch((err) =>
@@ -516,11 +550,11 @@ export async function createPasteGuard(
                   notifyAction({ ...featureCtx, action }); // pro: audit log / team report
                   // We showed a warning for this copy, so the desktop app — if the
                   // person runs it and has paired it — should not raise its own for
-                  // the same one. Only the hash travels, computed here so the pasted
-                  // text never crosses between extension contexts, and the background
-                  // drops it entirely when the bridge is off.
+                  // the same one. Only the locally computed hash travels to that
+                  // bridge; pasted text never travels to the desktop or a server.
+                  // The background drops the hash when the bridge is off.
                   browser.runtime
-                    .sendMessage({ type: 'si-bridge-handled', hash: contentHash(text).toString() })
+                    .sendMessage({ type: 'si-bridge-handled', hash: scan.handledHash })
                     .catch(() => {});
                   if (!ghostMode && action !== 'sanitize' && fingerprintsPromise) {
                     // A refused "paste" inserted nothing, so it is reported as
@@ -553,8 +587,8 @@ export async function createPasteGuard(
           );
 
           siDebug(config.name, 'paste blocked', {
-            secrets: detections.length,
-            types: detections.map((d) => d.type),
+            secrets: scan.total,
+            types: scan.types,
             detectMs,
             mountMs: elapsedMs(tMount),
           });

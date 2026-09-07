@@ -34,7 +34,11 @@ function inUrl(text: string, start: number, end: number): boolean {
  * Overlapping matches are resolved by specificity (private-key > known-key >
  * env-credential, then longer match wins). Returns detections sorted by start.
  */
-function* scanSecrets(text: string, patterns: Pattern[]): Generator<void, Detection[]> {
+function* scanSecrets(
+  text: string,
+  patterns: Pattern[],
+  maxFindings = Infinity,
+): Generator<void, Detection[]> {
   const raw: Detection[] = [];
   let steps = 0;
 
@@ -69,6 +73,7 @@ function* scanSecrets(text: string, patterns: Pattern[]): Generator<void, Detect
         // rules. Attached only when the pattern had it, so a detection from the
         // default catalogue is the same object it has always been.
         if (pattern.origin !== undefined) det.origin = pattern.origin;
+        if (raw.length >= maxFindings) throw new RangeError('Too many findings to process safely');
         raw.push(det);
       }
     }
@@ -112,8 +117,12 @@ function* scanSecrets(text: string, patterns: Pattern[]): Generator<void, Detect
 }
 
 /** Synchronous small-paste API; shares matching/ordering with the cooperative scan. */
-export function detectSecrets(text: string, patterns: Pattern[] = PATTERNS): Detection[] {
-  const scan = scanSecrets(text, patterns);
+export function detectSecrets(
+  text: string,
+  patterns: Pattern[] = PATTERNS,
+  maxFindings = Infinity,
+): Detection[] {
+  const scan = scanSecrets(text, patterns, maxFindings);
   let result = scan.next();
   while (!result.done) result = scan.next();
   return result.value;
