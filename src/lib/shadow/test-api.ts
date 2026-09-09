@@ -136,12 +136,15 @@ export async function readTestPolicy(token: string): Promise<ShadowPolicy> {
   if (
     !record(value) ||
     typeof value.version !== 'number' ||
+    !Number.isSafeInteger(value.version) ||
+    value.version < 0 ||
     value.refreshAfterSeconds !== 300 ||
     !Array.isArray(value.services) ||
     !value.services.every(
       (item) =>
         record(item) &&
         typeof item.serviceId === 'string' &&
+        item.serviceId.length > 0 &&
         ['sanctioned', 'recognized', 'review'].includes(String(item.classification)) &&
         typeof item.pasteBlocked === 'boolean',
     )

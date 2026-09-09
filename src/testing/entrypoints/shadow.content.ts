@@ -122,7 +122,11 @@ export default defineContentScript({
     await refreshPolicy();
     const storageChanged = () => void refreshPolicy();
     browser.storage.onChanged.addListener(storageChanged);
-    ctx.onInvalidated?.(() => browser.storage.onChanged.removeListener(storageChanged));
+    const policyTimer = window.setInterval(refreshPolicy, 5_000);
+    ctx.onInvalidated?.(() => {
+      browser.storage.onChanged.removeListener(storageChanged);
+      window.clearInterval(policyTimer);
+    });
 
     const patterns = compilePatterns(DEFAULT_BUNDLE.patterns).map(({ regex, ...pattern }) => ({
       ...pattern,

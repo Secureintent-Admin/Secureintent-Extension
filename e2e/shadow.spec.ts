@@ -53,6 +53,27 @@ async function activity() {
   }>;
 }
 
+async function createAdminSession() {
+  const response = await context.request.post(API + '/v1/shadow/test-session', {
+    headers: HEADERS,
+    data: { scenario: 'business-admin', consent: true },
+  });
+  expect(response.status()).toBe(201);
+  return response.json() as Promise<{ token: string }>;
+}
+
+async function updatePolicy(
+  token: string,
+  input: { serviceId: string; classification?: string; pasteBlocked?: boolean },
+) {
+  const response = await context.request.post(API + '/v1/shadow/admin/policy', {
+    headers: { ...HEADERS, Authorization: `Bearer ${token}` },
+    data: input,
+  });
+  expect(response.status()).toBe(200);
+  return response.json();
+}
+
 test.beforeEach(async () => {
   payloads = [];
   context = await chromium.launchPersistentContext('', {
@@ -147,6 +168,8 @@ test('captures all catalog hostnames, but not lookalikes', async () => {
 });
 
 test('counts clean and sensitive paste attempts without sending pasted text', async () => {
+  const policyAdmin = await createAdminSession();
+  await updatePolicy(policyAdmin.token, { serviceId: 'chatgpt', pasteBlocked: false });
   await enable();
   await context.grantPermissions(['clipboard-read', 'clipboard-write'], {
     origin: 'https://chatgpt.com',
@@ -177,12 +200,7 @@ test('counts clean and sensitive paste attempts without sending pasted text', as
   const state = await getState();
   expect(JSON.stringify(state)).not.toContain(secret);
   expect(payloads.join('\n')).not.toContain(secret);
-  const adminResponse = await context.request.post(API + '/v1/shadow/test-session', {
-    headers: HEADERS,
-    data: { scenario: 'business-admin', consent: true },
-  });
-  expect(adminResponse.status()).toBe(201);
-  const admin = await adminResponse.json();
+  const admin = await createAdminSession();
   const ledgerResponse = await context.request.post(API + '/v1/shadow/admin/ledger', {
     headers: { ...HEADERS, Authorization: `Bearer ${admin.token}` },
     data: { days: 30, limit: 100, offset: 0 },
@@ -200,6 +218,53 @@ test('counts clean and sensitive paste attempts without sending pasted text', as
     ]),
   );
   expect(JSON.stringify(ledger)).not.toContain(secret);
+});
+
+test('applies organisation paste policy without blocking website access', async () => {
+  const admin = await createAdminSession();
+  await updatePolicy(admin.token, {
+    serviceId: 'replit',
+    classification: 'sanctioned',
+    pasteBlocked: true,
+  });
+  await enable();
+  await context.grantPermissions(['clipboard-read', 'clipboard-write'], {
+    origin: 'https://replit.com',
+  });
+  const ai = await context.newPage();
+  await ai.goto('https://replit.com/');
+  await expect(ai).toHaveTitle('PRIVATE PAGE TITLE');
+  const composer = ai.locator('textarea');
+  await composer.fill('');
+  await popup.getByRole('button', { name: 'Sync & refresh' }).click();
+
+  const clean = 'ordinary source code';
+  await ai.evaluate((text) => navigator.clipboard.writeText(text), clean);
+  await composer.press(process.platform === 'darwin' ? 'Meta+V' : 'Control+V');
+  await expect(composer).toHaveValue('');
+  await expect(ai.locator('[data-si-shadow-test="notice"]')).toHaveCount(1);
+
+  await updatePolicy(admin.token, { serviceId: 'replit', pasteBlocked: false });
+  await popup.getByRole('button', { name: 'Sync & refresh' }).click();
+  await ai.evaluate((text) => navigator.clipboard.writeText(text), clean);
+  await composer.press(process.platform === 'darwin' ? 'Meta+V' : 'Control+V');
+  await expect(composer).toHaveValue(clean);
+
+  const state = await getState();
+  const policyResponse = await context.request.get(API + '/v1/shadow/policy', {
+    headers: { ...HEADERS, Authorization: `Bearer ${state.session.token}` },
+  });
+  const policy = await policyResponse.json();
+  expect(policy.refreshAfterSeconds).toBe(300);
+  expect(policy.services).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        serviceId: 'replit',
+        classification: 'sanctioned',
+        pasteBlocked: false,
+      }),
+    ]),
+  );
 });
 
 test('retries offline metadata, deduplicates backend replays, and clears pending events on disable', async () => {
