@@ -70,7 +70,7 @@ function askSensitiveAction(site: string, reason: string, count: number): Promis
           <p class="reason"></p>
           <p>No pasted content or secret value is included in telemetry.</p>
           <div class="actions">
-            <button data-action="warned" class="danger">Cancel paste</button>
+            <button data-action="cancelled" class="danger">Cancel paste</button>
             <button data-action="sanitised" class="primary">Sanitise &amp; paste</button>
             <button data-action="warning_bypassed">Paste anyway</button>
           </div>
@@ -78,8 +78,15 @@ function askSensitiveAction(site: string, reason: string, count: number): Promis
       </div>`;
     (wrap.querySelector('.reason') as HTMLElement).textContent = `Reason: ${reason}`;
     const finish = (action: DlpAction) => {
+      document.removeEventListener('keydown', onKeyDown, true);
       host.remove();
       resolve(action);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      finish('cancelled');
     };
     wrap.querySelectorAll<HTMLButtonElement>('button[data-action]').forEach((button) => {
       button.addEventListener('click', () => finish(button.dataset.action as DlpAction), {
@@ -88,6 +95,8 @@ function askSensitiveAction(site: string, reason: string, count: number): Promis
     });
     root.append(wrap);
     document.documentElement.append(host);
+    document.addEventListener('keydown', onKeyDown, true);
+    wrap.querySelector<HTMLButtonElement>('button[data-action="cancelled"]')?.focus();
   });
 }
 

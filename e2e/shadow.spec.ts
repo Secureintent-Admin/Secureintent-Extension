@@ -7,7 +7,12 @@ const AI_CATALOG: { services: AiService[] } = JSON.parse(readFileSync('src/lib/s
 
 declare const chrome: {
   storage: { local: {
-    get(key: string): Promise<Record<string, { session: { token: string }; queue: object[]; seen: object[] }>>;
+    get(key: string): Promise<
+      Record<
+        string,
+        { session: { token: string; seatLabel: string }; queue: object[]; seen: object[] }
+      >
+    >;
     set(value: Record<string, unknown>): Promise<void>;
   } };
 };
@@ -34,6 +39,20 @@ async function recordedCount() {
   return (await response.json()).total as number;
 }
 
+async function activity() {
+  const state = await getState();
+  const response = await context.request.get(API + '/v1/shadow/activity', {
+    headers: { ...HEADERS, Authorization: `Bearer ${state.session.token}` },
+  });
+  expect(response.status()).toBe(200);
+  return response.json() as Promise<{
+    visits: number;
+    pasteAttempts: number;
+    pasteBytes: number;
+    sensitiveEvents: number;
+  }>;
+}
+
 test.beforeEach(async () => {
   payloads = [];
   context = await chromium.launchPersistentContext('', {
@@ -45,7 +64,7 @@ test.beforeEach(async () => {
   await context.route('**/*', async route => {
     const url = route.request().url();
     if (url.startsWith(API + '/')) {
-      if (url.endsWith('/v1/shadow/visits') && route.request().method() === 'POST') {
+      if (url.endsWith('/v1/shadow/telemetry') && route.request().method() === 'POST') {
         payloads.push(route.request().postData() ?? '');
       }
       await route.continue();
@@ -127,9 +146,65 @@ test('captures all catalog hostnames, but not lookalikes', async () => {
   expect(await recordedCount()).toBe(count);
 });
 
+test('counts clean and sensitive paste attempts without sending pasted text', async () => {
+  await enable();
+  await context.grantPermissions(['clipboard-read', 'clipboard-write'], {
+    origin: 'https://chatgpt.com',
+  });
+  const ai = await context.newPage();
+  await ai.goto('https://chatgpt.com/');
+  const composer = ai.locator('textarea');
+  await composer.fill('');
+  await composer.click();
+
+  const clean = 'hello from a clean UTF-8 paste π';
+  await ai.evaluate((text) => navigator.clipboard.writeText(text), clean);
+  await composer.press(process.platform === 'darwin' ? 'Meta+V' : 'Control+V');
+  await expect(composer).toHaveValue(clean);
+  await expect.poll(async () => (await activity()).pasteAttempts).toBe(1);
+  expect((await activity()).pasteBytes).toBe(new TextEncoder().encode(clean).byteLength);
+
+  await composer.fill('');
+  const secret = 'sk-proj-abcdefghijklmnopqrstuvwxyz123456';
+  await ai.evaluate((text) => navigator.clipboard.writeText(text), secret);
+  await composer.press(process.platform === 'darwin' ? 'Meta+V' : 'Control+V');
+  await expect(ai.locator('[data-si-shadow-test="warning"]')).toHaveCount(1);
+  await ai.keyboard.press('Escape');
+  await expect(ai.locator('[data-si-shadow-test="warning"]')).toHaveCount(0);
+  await expect(composer).toHaveValue('');
+  await expect.poll(async () => (await activity()).sensitiveEvents).toBe(1);
+
+  const state = await getState();
+  expect(JSON.stringify(state)).not.toContain(secret);
+  expect(payloads.join('\n')).not.toContain(secret);
+  const adminResponse = await context.request.post(API + '/v1/shadow/test-session', {
+    headers: HEADERS,
+    data: { scenario: 'business-admin', consent: true },
+  });
+  expect(adminResponse.status()).toBe(201);
+  const admin = await adminResponse.json();
+  const ledgerResponse = await context.request.post(API + '/v1/shadow/admin/ledger', {
+    headers: { ...HEADERS, Authorization: `Bearer ${admin.token}` },
+    data: { days: 30, limit: 100, offset: 0 },
+  });
+  expect(ledgerResponse.status()).toBe(200);
+  const ledger = await ledgerResponse.json();
+  expect(ledger.events).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        hostname: 'chatgpt.com',
+        seatLabel: state.session.seatLabel,
+        reason: 'OpenAI API key',
+        action: 'cancelled',
+      }),
+    ]),
+  );
+  expect(JSON.stringify(ledger)).not.toContain(secret);
+});
+
 test('retries offline metadata, deduplicates backend replays, and clears pending events on disable', async () => {
   await enable();
-  await context.route(API + '/v1/shadow/visits', route =>
+  await context.route(API + '/v1/shadow/telemetry', route =>
     route.request().method() === 'POST' ? route.abort() : route.fallback(),
   );
   const ai = await context.newPage();
@@ -137,23 +212,23 @@ test('retries offline metadata, deduplicates backend replays, and clears pending
   await expect.poll(async () => (await getState()).queue.length).toBe(1);
   const saved = await getState();
   expect(await recordedCount()).toBe(0);
-  await context.unroute(API + '/v1/shadow/visits');
+  await context.unroute(API + '/v1/shadow/telemetry');
   await popup.getByRole('button', { name: 'Sync & refresh' }).click();
   await expect.poll(recordedCount).toBe(1);
   await expect.poll(async () => (await getState()).queue.length).toBe(0);
-  const replay = await context.request.post(API + '/v1/shadow/visits', {
+  const replay = await context.request.post(API + '/v1/shadow/telemetry', {
     headers: { ...HEADERS, Authorization: `Bearer ${saved.session.token}` }, data: { events: saved.queue },
   });
   expect(replay.status()).toBe(200);
   expect(await recordedCount()).toBe(1);
-  await context.route(API + '/v1/shadow/visits', route =>
+  await context.route(API + '/v1/shadow/telemetry', route =>
     route.request().method() === 'POST' ? route.abort() : route.fallback(),
   );
   await ai.reload();
   await expect.poll(async () => (await getState()).queue.length).toBe(1);
   await popup.getByRole('button', { name: 'Disable & clear pending metadata' }).click();
   await expect.poll(async () => (await getState()).queue.length).toBe(0);
-  await context.unroute(API + '/v1/shadow/visits');
+  await context.unroute(API + '/v1/shadow/telemetry');
   await enable();
   expect(await recordedCount()).toBe(0); // new session cannot receive previous seat's pending events
 });
@@ -166,7 +241,7 @@ test('backend rejects privacy violations, non-Business identities and tenant spo
     const response = await api.post(API + '/v1/shadow/test-session', { headers: HEADERS, data: { scenario, consent: true } });
     expect(response.status()).toBe(201);
     const session = await response.json();
-    const result = await api.post(API + '/v1/shadow/visits', {
+    const result = await api.post(API + '/v1/shadow/telemetry', {
       headers: { ...HEADERS, Authorization: `Bearer ${session.token}` }, data: { events: [event] },
     });
     expect(result.status()).toBe(403);
@@ -177,9 +252,9 @@ test('backend rejects privacy violations, non-Business identities and tenant spo
   for (const data of [{ events: [{ ...event, url: 'https://chatgpt.com/c/PRIVATE' }] },
     { events: [{ ...event, hostname: 'chatgpt.com?prompt=PRIVATE' }] },
     { events: [event], orgId: 'test-org-beta' }, { events: [{ ...event, seatId: 'another' }] }]) {
-    expect((await api.post(API + '/v1/shadow/visits', { headers, data })).status()).toBe(400);
+    expect((await api.post(API + '/v1/shadow/telemetry', { headers, data })).status()).toBe(400);
   }
-  expect((await api.post(API + '/v1/shadow/visits', { headers, data: { events: [event] } })).status()).toBe(200);
+  expect((await api.post(API + '/v1/shadow/telemetry', { headers, data: { events: [event] } })).status()).toBe(200);
   const other = await api.post(API + '/v1/shadow/test-session', { headers: HEADERS, data: { scenario: 'business-other', consent: true } });
   const otherSession = await other.json();
   const otherRead = await api.get(API + '/v1/shadow/visits', { headers: { ...HEADERS, Authorization: `Bearer ${otherSession.token}` } });

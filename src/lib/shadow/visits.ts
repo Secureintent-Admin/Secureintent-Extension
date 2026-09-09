@@ -21,7 +21,7 @@ export type PasteVolumeEvent = {
   catalogVersion: number;
   byteSize: number;
 };
-export type DlpAction = 'blocked' | 'warned' | 'sanitised' | 'warning_bypassed';
+export type DlpAction = 'blocked' | 'cancelled' | 'sanitised' | 'warning_bypassed';
 export type DlpEvent = {
   schemaVersion: 1;
   eventId: string;
@@ -187,7 +187,7 @@ export function makeDlpEvent(
     typeof input.reason !== 'string' ||
     input.reason.length < 1 ||
     input.reason.length > 100 ||
-    !['blocked', 'warned', 'sanitised', 'warning_bypassed'].includes(input.action) ||
+    !['blocked', 'cancelled', 'sanitised', 'warning_bypassed'].includes(input.action) ||
     !Number.isSafeInteger(input.findingCount) ||
     input.findingCount < 1 ||
     input.findingCount > 100_000
