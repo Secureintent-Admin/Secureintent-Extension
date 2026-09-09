@@ -246,6 +246,8 @@ test('applies organisation paste policy without blocking website access', async 
 
   await updatePolicy(admin.token, { serviceId: 'replit', pasteBlocked: false });
   await popup.getByRole('button', { name: 'Sync & refresh' }).click();
+  await ai.reload();
+  await composer.fill('');
   await ai.evaluate((text) => navigator.clipboard.writeText(text), clean);
   await composer.press(process.platform === 'darwin' ? 'Meta+V' : 'Control+V');
   await expect(composer).toHaveValue(clean);
