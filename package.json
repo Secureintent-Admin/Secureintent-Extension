@@ -10,6 +10,9 @@
     ".": "./src/core.ts"
   },
   "scripts": {
+    "build:shadow": "wxt build --mode shadow-test --config wxt.shadow.config.ts && wxt prepare",
+    "build:shadow:firefox": "wxt build --mode shadow-test --config wxt.shadow.config.ts -b firefox && wxt prepare",
+    "test:shadow:e2e": "playwright test --config playwright.shadow.config.ts",
     "dev": "wxt",
     "dev:firefox": "wxt -b firefox",
     "build": "wxt build",
