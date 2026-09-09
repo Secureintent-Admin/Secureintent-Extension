@@ -1,0 +1,131 @@
+{
+  "version": 1,
+  "services": [
+    {
+      "id": "chatgpt",
+      "name": "ChatGPT",
+      "category": "general",
+      "hostnames": ["chatgpt.com", "chat.openai.com"],
+      "recognition": "hostname"
+    },
+    {
+      "id": "claude",
+      "name": "Claude",
+      "category": "general",
+      "hostnames": ["claude.ai"],
+      "recognition": "hostname"
+    },
+    {
+      "id": "gemini",
+      "name": "Gemini",
+      "category": "general",
+      "hostnames": ["gemini.google.com"],
+      "recognition": "hostname"
+    },
+    {
+      "id": "copilot",
+      "name": "Microsoft Copilot",
+      "category": "general",
+      "hostnames": ["copilot.microsoft.com"],
+      "recognition": "hostname"
+    },
+    {
+      "id": "perplexity",
+      "name": "Perplexity",
+      "category": "general",
+      "hostnames": ["perplexity.ai", "www.perplexity.ai"],
+      "recognition": "hostname"
+    },
+    {
+      "id": "grok",
+      "name": "Grok",
+      "category": "general",
+      "hostnames": ["grok.com"],
+      "recognition": "hostname"
+    },
+    {
+      "id": "mistral",
+      "name": "Mistral Le Chat",
+      "category": "general",
+      "hostnames": ["chat.mistral.ai"],
+      "recognition": "hostname"
+    },
+    {
+      "id": "meta",
+      "name": "Meta AI",
+      "category": "general",
+      "hostnames": ["meta.ai", "www.meta.ai"],
+      "recognition": "hostname"
+    },
+    {
+      "id": "poe",
+      "name": "Poe",
+      "category": "general",
+      "hostnames": ["poe.com"],
+      "recognition": "hostname"
+    },
+    {
+      "id": "character",
+      "name": "Character.AI",
+      "category": "general",
+      "hostnames": ["character.ai"],
+      "recognition": "hostname"
+    },
+    {
+      "id": "deepseek",
+      "name": "DeepSeek",
+      "category": "general",
+      "hostnames": ["chat.deepseek.com"],
+      "recognition": "hostname"
+    },
+    {
+      "id": "ai-studio",
+      "name": "Google AI Studio",
+      "category": "developer",
+      "hostnames": ["aistudio.google.com"],
+      "recognition": "hostname"
+    },
+    {
+      "id": "github-copilot",
+      "name": "GitHub Copilot",
+      "category": "developer",
+      "hostnames": ["github.com"],
+      "recognition": "copilot-route"
+    },
+    {
+      "id": "cursor",
+      "name": "Cursor",
+      "category": "developer",
+      "hostnames": ["cursor.com", "www.cursor.com"],
+      "recognition": "hostname"
+    },
+    {
+      "id": "replit",
+      "name": "Replit",
+      "category": "developer",
+      "hostnames": ["replit.com"],
+      "recognition": "hostname"
+    },
+    {
+      "id": "lovable",
+      "name": "Lovable",
+      "category": "developer",
+      "hostnames": ["lovable.dev"],
+      "recognition": "hostname"
+    },
+    {
+      "id": "bolt",
+      "name": "Bolt",
+      "category": "developer",
+      "hostnames": ["bolt.new"],
+      "recognition": "hostname"
+    },
+    {
+      "id": "v0",
+      "name": "v0",
+      "category": "developer",
+      "hostnames": ["v0.dev", "v0.app"],
+      "recognition": "hostname"
+    }
+  ]
+}
