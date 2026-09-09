@@ -15,7 +15,7 @@ export default defineConfig({
     name: 'SecureIntent — LOCAL Discovery Test',
     description:
       'Local-only catalog and visit test harness. Synthetic Business seats. Not a production protection build.',
-    permissions: ['storage', 'alarms'],
+    permissions: ['storage', 'alarms', ...(browser === 'firefox' ? [] : ['offscreen'])],
     host_permissions: ['http://127.0.0.1/*'],
     content_security_policy:
       browser === 'firefox'

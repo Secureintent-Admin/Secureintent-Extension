@@ -3,6 +3,8 @@ import {
   canDiscover,
   emptyVisitState,
   enqueueVisit,
+  makeDlpEvent,
+  makePasteVolume,
   makeVisit,
   QUEUE_LIMIT,
   type TestSession,
@@ -101,5 +103,83 @@ describe('hostname-only visits', () => {
     expect(state.dropped).toBe(1);
     expect(enqueueVisit(state, nextEvent, session.expiresAt).session).toBeNull();
     expect(enqueueVisit(state, nextEvent, session.expiresAt).queue).toEqual([]);
+  });
+});
+
+describe('hostname-only paste telemetry', () => {
+  it('records attempted UTF-8 bytes without retaining pasted content', () => {
+    const event = makePasteVolume(sender, id, 42, now);
+    expect(event).toEqual({
+      schemaVersion: 1,
+      eventId: id,
+      type: 'ai_paste_volume',
+      timestamp: now,
+      hostname: 'chatgpt.com',
+      serviceId: 'chatgpt',
+      catalogVersion: 1,
+      byteSize: 42,
+    });
+    expect(JSON.stringify(event)).not.toMatch(/PRIVATE|SECRET|prompt|https:|\/c\//);
+  });
+
+  it('rejects invalid sizes, identities, frames and destinations', () => {
+    for (const byteSize of [-1, 8_000_001, 1.5, Number.NaN]) {
+      expect(makePasteVolume(sender, id, byteSize, now)).toBeNull();
+    }
+    expect(makePasteVolume(sender, 'not-a-uuid', 1, now)).toBeNull();
+    expect(makePasteVolume({ ...sender, frameId: 1 }, id, 1, now)).toBeNull();
+    expect(makePasteVolume({ ...sender, incognito: true }, id, 1, now)).toBeNull();
+    expect(makePasteVolume({ ...sender, url: 'https://example.com' }, id, 1, now)).toBeNull();
+  });
+
+  it('records only a bounded reason and outcome for sensitive pastes', () => {
+    const event = makeDlpEvent(
+      sender,
+      {
+        eventId: '8af05dad-d2c8-43d2-bf56-29bdb930b605',
+        pasteEventId: id,
+        detectionType: 'known-key',
+        reason: 'Known API key',
+        action: 'sanitised',
+        findingCount: 2,
+      },
+      now,
+    );
+    expect(event).toMatchObject({
+      hostname: 'chatgpt.com',
+      detectionType: 'known-key',
+      reason: 'Known API key',
+      action: 'sanitised',
+      findingCount: 2,
+    });
+    expect(Object.keys(event!).sort()).toEqual([
+      'action',
+      'catalogVersion',
+      'detectionType',
+      'eventId',
+      'findingCount',
+      'hostname',
+      'pasteEventId',
+      'reason',
+      'schemaVersion',
+      'serviceId',
+      'timestamp',
+      'type',
+    ]);
+  });
+
+  it('rejects malformed sensitive outcomes', () => {
+    const valid = {
+      eventId: '8af05dad-d2c8-43d2-bf56-29bdb930b605',
+      pasteEventId: id,
+      detectionType: 'known-key' as const,
+      reason: 'Known API key',
+      action: 'blocked' as const,
+      findingCount: 1,
+    };
+    expect(makeDlpEvent(sender, { ...valid, reason: '' }, now)).toBeNull();
+    expect(makeDlpEvent(sender, { ...valid, reason: 'x'.repeat(101) }, now)).toBeNull();
+    expect(makeDlpEvent(sender, { ...valid, findingCount: 0 }, now)).toBeNull();
+    expect(makeDlpEvent(sender, { ...valid, pasteEventId: 'not-a-uuid' }, now)).toBeNull();
   });
 });

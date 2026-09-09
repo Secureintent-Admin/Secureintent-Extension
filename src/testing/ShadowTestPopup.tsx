@@ -8,7 +8,14 @@ type Status = {
   seatLabel?: string | null;
   queued?: number;
   dropped?: number;
+  policyVersion?: number;
   error?: string | null;
+  activity?: {
+    visits: number;
+    pasteAttempts: number;
+    pasteBytes: number;
+    sensitiveEvents: number;
+  } | null;
   readback?: {
     total: number;
     events: { eventId: string; hostname: string; timestamp: number }[];
@@ -61,7 +68,9 @@ export function ShadowTestPopup() {
       </header>
       <section className="si-hero">
         <h1 className="si-hero-title">Shadow AI Discovery</h1>
-        <p className="si-lockcfg-note">Catalog &amp; visit tracking · synthetic Business account</p>
+        <p className="si-lockcfg-note">
+          Discovery &amp; DLP telemetry · synthetic Business account
+        </p>
         <div className="si-hero-metric">
           <b>{AI_CATALOG.services.length}</b> recognised AI tools in catalog
         </div>
@@ -81,8 +90,8 @@ export function ShadowTestPopup() {
               checked={consent}
               onChange={(event) => setConsent(event.target.checked)}
             />{' '}
-            Allow hostname-only visit metadata to the backend on this computer. No URLs, page
-            content or pasted text.
+            Allow hostname-only discovery metadata to the backend on this computer. No URLs, page
+            content, prompts or pasted text.
           </label>
         )}
         <p className="si-lockcfg-note">
@@ -110,7 +119,7 @@ export function ShadowTestPopup() {
       {status.enabled && (
         <section className="si-lockcfg">
           <div className="si-lockcfg-head">
-            <span className="si-lockcfg-title">Local visit readback</span>
+            <span className="si-lockcfg-title">Local telemetry readback</span>
             <button
               type="button"
               className="si-lockcfg-btn"
@@ -124,9 +133,16 @@ export function ShadowTestPopup() {
             {status.readback ? `${status.readback.total} recorded visits` : 'Backend unavailable'} ·{' '}
             {status.queued ?? 0} pending · {status.dropped ?? 0} expired/discarded
           </p>
+          {status.activity && (
+            <p className="si-lockcfg-note">
+              {status.activity.pasteAttempts} paste attempts · {status.activity.pasteBytes} bytes ·{' '}
+              {status.activity.sensitiveEvents} sensitive events · policy v
+              {status.policyVersion ?? 0}
+            </p>
+          )}
           <p className="si-lockcfg-note">
-            Recognised-domain page loads, not confirmed AI use. Stored metadata remains locally for
-            up to 7 days.
+            Visits are recognised-domain page loads. Paste volume represents attempts, not confirmed
+            submission. Stored metadata remains locally for up to 7 days.
           </p>
           <ul className="si-lockcfg-note">
             {status.readback?.events.slice(0, 8).map((event) => (

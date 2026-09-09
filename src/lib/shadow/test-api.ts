@@ -1,4 +1,4 @@
-import type { TestSession, VisitEvent } from './visits';
+import type { ShadowEvent, ShadowPolicy, TestSession, VisitEvent } from './visits';
 
 // Fixed loopback destination; env files cannot redirect this harness to production.
 export const SHADOW_TEST_API = 'http://127.0.0.1:8791';
@@ -77,6 +77,18 @@ export async function sendTestVisits(token: string, events: VisitEvent[]): Promi
   }
   return value.acceptedIds;
 }
+export async function sendTestTelemetry(token: string, events: ShadowEvent[]): Promise<string[]> {
+  const value = await request('/v1/shadow/telemetry', token, { events });
+  if (
+    !record(value) ||
+    !Array.isArray(value.acceptedIds) ||
+    !value.acceptedIds.every(
+      (id) => typeof id === 'string' && events.some((event) => event.eventId === id),
+    )
+  )
+    throw new Error('Invalid acknowledgement');
+  return value.acceptedIds;
+}
 export type TestReadback = {
   total: number;
   events: { eventId: string; hostname: string; timestamp: number }[];
@@ -97,4 +109,43 @@ export async function readTestVisits(token: string): Promise<TestReadback> {
       : [],
   );
   return { total: value.total, events };
+}
+
+export type TestActivity = {
+  seatLabel: string;
+  visits: number;
+  pasteAttempts: number;
+  pasteBytes: number;
+  sensitiveEvents: number;
+};
+export async function readTestActivity(token: string): Promise<TestActivity> {
+  const value = await request('/v1/shadow/activity', token);
+  if (
+    !record(value) ||
+    typeof value.seatLabel !== 'string' ||
+    !['visits', 'pasteAttempts', 'pasteBytes', 'sensitiveEvents'].every(
+      (key) => typeof value[key] === 'number' && Number.isSafeInteger(value[key]),
+    )
+  )
+    throw new Error('Invalid activity readback');
+  return value as TestActivity;
+}
+
+export async function readTestPolicy(token: string): Promise<ShadowPolicy> {
+  const value = await request('/v1/shadow/policy', token);
+  if (
+    !record(value) ||
+    typeof value.version !== 'number' ||
+    value.refreshAfterSeconds !== 300 ||
+    !Array.isArray(value.services) ||
+    !value.services.every(
+      (item) =>
+        record(item) &&
+        typeof item.serviceId === 'string' &&
+        ['sanctioned', 'recognized', 'review'].includes(String(item.classification)) &&
+        typeof item.pasteBlocked === 'boolean',
+    )
+  )
+    throw new Error('Invalid policy response');
+  return value as ShadowPolicy;
 }
