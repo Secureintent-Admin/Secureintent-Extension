@@ -1,9 +1,10 @@
 # Phase One Extension Development — Shadow AI Discovery V1
 
-**Status:** Local/staging implementation complete  
-**Recorded:** 10 September 2026  
-**Integration branch:** `demo/shadow-ai-v1`  
-**Production status:** Not merged, pushed, deployed, or submitted to a browser store
+- **Status:** Local/staging implementation complete and published on non-main branches
+- **Recorded:** 10 September 2026
+- **Last updated:** 10 September 2026
+- **Integration branch:** `demo/shadow-ai-v1`
+- **Production status:** Not merged into `main`, deployed, or submitted to a browser store
 
 ## 1. Purpose
 
@@ -15,6 +16,19 @@ design language.
 The implementation demonstrates the complete V1 flow locally without using
 customer accounts, customer telemetry, production ClickHouse, the live Business
 dashboard, or production extension configuration.
+
+### Current checkpoint
+
+- The extension, local backend, and local Business dashboard are integrated on
+  `demo/shadow-ai-v1` in their respective repositories.
+- All Shadow feature branches and all three demo branches have been published to
+  the organisation GitHub repositories.
+- The backend and extension were started locally, and the complete local demo
+  flow was manually confirmed working on 10 September 2026.
+- Automated unit, contract, build, browser, privacy, and API validation has been
+  completed as recorded in Section 16.
+- No `main` branch, production service, production database, customer account,
+  or browser-store package was changed.
 
 ## 2. Confirmed V1 scope
 
@@ -301,7 +315,11 @@ Phase One enforces the following rules:
 
 Future email integration remains outside Phase One.
 
-## 15. Branch record
+## 15. Published branch record
+
+The branch heads below identify the completed feature checkpoints. Integration
+branches can receive later documentation-only commits, so developers should
+always fetch and use the latest `origin/demo/shadow-ai-v1` tip.
 
 ### Extension repository
 
@@ -312,7 +330,7 @@ Future email integration remains outside Phase One.
 | `feat/shadow-paste-volume` | `7059634` | Paste volume and telemetry foundation |
 | `feat/shadow-sensitive-events` | `730b4b5` | Sensitive outcomes and privacy E2E |
 | `feat/shadow-policy-actions` | `9e6acfd` | Refresh and paste-policy enforcement |
-| `demo/shadow-ai-v1` | `23f99b7` | Integrated extension demo and handoff |
+| `demo/shadow-ai-v1` | `4bb0c66`* | Integrated extension demo and handoff |
 
 ### Backend repository
 
@@ -334,7 +352,24 @@ Future email integration remains outside Phase One.
 | `feat/shadow-policy-actions` | `7db06fe` | Explicit policy actions |
 | `demo/shadow-ai-v1` | `7db06fe` | Integrated dashboard demo |
 
-No branch was pushed to a remote, and no `main` branch was modified.
+\* Extension demo checkpoint before this documentation update.
+
+Published repositories:
+
+- Extension: <https://github.com/Secureintent-Admin/Secureintent-Extension>
+- Backend: <https://github.com/SecureIntentAI/secureintent-backend>
+- Dashboard: <https://github.com/SecureIntentAI/secureintent.ai>
+
+All branches in the tables are now available from `origin`. At the publication
+checkpoint, the remote `main` references remained unchanged:
+
+- Extension: `f6a81fa`
+- Backend: `9b0a7f0`
+- Dashboard: `3612483`
+
+The backend remote `main` had advanced independently beyond the developer's
+local `main`. Any production integration must therefore fetch the latest remote
+state first and must not assume the local `main` is current.
 
 ## 16. Validation results
 
@@ -352,6 +387,7 @@ Validation completed during Phase One:
 - Catalog parity check: passed.
 - ClickHouse contract check: passed.
 - Dashboard browser interaction and responsive-layout check: passed.
+- Manual local startup and integrated demo smoke test: confirmed working.
 
 The six extension E2E scenarios cover:
 
@@ -440,3 +476,159 @@ promotion still requires:
 8. security, privacy, permissions, and release review;
 9. explicit approval before any merge, deployment, or browser-store submission.
 
+## 20. Developer handoff and resume point
+
+Do not rebuild Phase One from scratch. The complete local implementation is the
+latest `origin/demo/shadow-ai-v1` branch in each repository.
+
+For a new clone:
+
+```sh
+git clone https://github.com/Secureintent-Admin/Secureintent-Extension.git
+cd Secureintent-Extension
+git switch --track origin/demo/shadow-ai-v1
+```
+
+Repeat the same checkout in the backend and dashboard repositories using their
+GitHub URLs from Section 15.
+
+For an existing clone:
+
+```sh
+git fetch origin
+git switch demo/shadow-ai-v1
+git pull --ff-only
+```
+
+Before starting work, read these sources in order:
+
+1. this Phase One record;
+2. `docs/shadow-local-testing.md` for startup and verification;
+3. `src/lib/shadow/catalog.json` for catalog truth;
+4. `src/lib/shadow/visits.ts` for telemetry contracts;
+5. `../secureintent-backend/testing/shadow/validation.ts` for backend validation;
+6. the ClickHouse schema and queries listed in Section 12;
+7. `../secureintent.ai/shadow.html` for the integrated dashboard behavior.
+
+Use the existing feature branches when reviewing how an individual capability
+was introduced. Use the demo branches when running or fixing the complete local
+flow.
+
+## 21. Ordered plan for the next phase
+
+The next phase is production integration, not a rewrite of the local demo. Work
+should proceed in this order.
+
+### 21.1 Confirm decisions before coding
+
+Obtain and record:
+
+1. final Figma/component approval from Aleena;
+2. confirmation that the 18-service catalog and exact host rules remain approved;
+3. staging access and test Business-team access;
+4. production ClickHouse database/cluster details;
+5. approved event-retention period;
+6. approved Clerk organisation, membership, and pseudonymous-seat mapping;
+7. production API route names and extension configuration method;
+8. owners and acceptance dates for Chrome and Firefox.
+
+Do not invent production retention, identity attribution, or endpoint values when
+these decisions are missing.
+
+### 21.2 Prepare fresh non-main integration branches
+
+Production work must start from the latest remote `main`, particularly in the
+backend repository where remote `main` has moved since Phase One began.
+
+```sh
+git fetch origin
+git switch -c feat/shadow-ai-production-integration origin/main
+```
+
+Create equivalent non-main integration branches in the extension and dashboard
+repositories. Port or cherry-pick only the reviewed production-relevant changes
+from `origin/demo/shadow-ai-v1`. Do not merge the local-only demo wholesale into
+production.
+
+### 21.3 Integrate the backend first
+
+1. Apply the approved ClickHouse schema with the approved retention policy.
+2. Add production ingestion and reporting routes to the normal backend structure.
+3. Replace synthetic sessions with Clerk Business-team authentication.
+4. Derive organisation and pseudonymous seat identifiers server-side.
+5. Preserve strict payload allowlists, tenant isolation, idempotency, and privacy
+   rejection tests.
+6. Store organisation classifications and paste policies in the approved
+   production policy model.
+7. Put the feature behind an organisation/staging feature flag.
+8. Validate aggregation queries against realistic staged volumes.
+
+### 21.4 Integrate the Business dashboard
+
+1. Add the approved Shadow AI route to the existing Business navigation.
+2. Use Aleena's final components and wording.
+3. Connect summary, trends, tools, ledger, pagination, and policy actions to the
+   production backend endpoints.
+4. Preserve Seat IDs by default and all V1 metric definitions.
+5. Add loading, empty, error, permission, and stale-policy states.
+
+### 21.5 Integrate the production extension
+
+1. Retain the tested catalog, visit semantics, paste measurement, DLP outcomes,
+   queue bounds, retry, and worker processing.
+2. Replace the fixed loopback test API with approved environment configuration.
+3. Attach authenticated organisation/seat context without exposing emails or
+   accepting tenant identity from page code.
+4. Connect the production team-policy refresh while preserving the five-minute
+   acceptance target.
+5. Keep hostname permissions explicit and verify Chrome and Firefox manifests.
+6. Keep collection gated by the approved consent and organisation feature flag.
+
+### 21.6 Stage, validate, and release
+
+1. Run all existing Phase One automated tests.
+2. Add production-route, Clerk, ClickHouse, migration, and rollback tests.
+3. Run end-to-end staging tests for both Business admin and member roles.
+4. Manually accept Chrome and Firefox behavior on every catalog service.
+5. Repeat the privacy inspection to prove that content, secrets, URLs, paths,
+   queries, and emails never enter telemetry or logs.
+6. Verify policy pickup within five minutes for online extensions.
+7. Complete security, permissions, performance, and product reviews.
+8. Open reviewed pull requests; merge or deploy only after explicit approval.
+
+## 22. Decisions and behavior that must not be reimplemented
+
+The following Phase One decisions are already implemented and tested:
+
+- The catalog is versioned and exact-host based; ordinary GitHub traffic is not
+  Copilot usage.
+- A visit means one recognised top-level document load, not focus or paste.
+- Paste volume means attempted UTF-8 text bytes, including clean pastes; it does
+  not mean confirmed submission.
+- The policy blocks paste insertion only; it does not block website access.
+- Classification is organisation-specific and defaults to recognised/unsanctioned.
+- Telemetry never contains pasted content, secret values, full URLs, paths,
+  queries, emails, page content, or prompts.
+- Seat identifiers are pseudonymous by default.
+- The extension queue is bounded, expires, retries, and replays idempotently.
+- Policy delivery targets five minutes without claiming real-time guarantees.
+
+Reuse the catalog, event types, validation rules, tests, dashboard definitions,
+and ClickHouse queries as the Phase Two baseline. Change them only through an
+explicitly approved product or privacy decision.
+
+## 23. Target completion criteria
+
+The overall V1 target is complete for production only when:
+
+1. both Chrome and Firefox pass staging acceptance;
+2. real Business-team authentication and tenant attribution replace synthetic
+   sessions;
+3. ClickHouse storage, retention, reporting, and rollback are approved and live
+   in staging;
+4. the production Business dashboard matches the approved design and definitions;
+5. policy actions are enforced by active extensions within the agreed target;
+6. privacy tests prove that no content or secret value leaves the browser;
+7. security, product, and release owners approve the change;
+8. the reviewed branches are deliberately merged and deployed through the normal
+   release process.
